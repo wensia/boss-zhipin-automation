@@ -1,277 +1,295 @@
 /**
- * 日志页面
+ * 运行日志页面 - 实时显示打招呼任务日志
  */
-import { useState, useEffect } from 'react';
-import { useLogs } from '@/hooks/useLogs';
-import type { LogEntry, LogLevel, LogAction } from '@/types';
-import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
+
+interface GreetingLog {
+  timestamp: string;
+  level: string;
+  message: string;
+}
+
+interface GreetingStatus {
+  status: string;
+  target_count: number;
+  current_index: number;
+  success_count: number;
+  failed_count: number;
+  progress: number;
+  start_time: string | null;
+  end_time: string | null;
+  elapsed_time: number | null;
+  error_message: string | null;
+}
 
 export default function Logs() {
-  const { getLogs, loading } = useLogs();
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
-  const [limit] = useState(50);
-  const [levelFilter, setLevelFilter] = useState<LogLevel | 'all'>('all');
-  const [actionFilter, setActionFilter] = useState<LogAction | 'all'>('all');
+  const [logs, setLogs] = useState<GreetingLog[]>([]);
+  const [status, setStatus] = useState<GreetingStatus | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadLogs = async () => {
-    try {
-      const params: any = {
-        limit,
-        offset: page * limit,
-      };
-      if (levelFilter !== 'all') params.level = levelFilter;
-      if (actionFilter !== 'all') params.action = actionFilter;
-
-      const response = await getLogs(params);
-      setLogs(response.logs);
-      setTotal(response.total);
-    } catch (error) {
-      console.error('加载日志失败:', error);
-    }
-  };
-
+  // 轮询日志和状态
   useEffect(() => {
-    loadLogs();
-  }, [page, levelFilter, actionFilter]);
+    const fetchData = async () => {
+      try {
+        // 获取状态
+        const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+        const statusData = await statusRes.json();
+        setStatus(statusData);
 
-  const getLevelBadgeVariant = (level: LogLevel): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    switch (level) {
-      case 'debug':
-        return 'outline';
-      case 'info':
-        return 'default';
-      case 'warning':
-        return 'secondary';
-      case 'error':
-      case 'critical':
-        return 'destructive';
+        // 获取日志
+        const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+        const logsData = await logsRes.json();
+        setLogs(logsData.logs || []);
+      } catch (error) {
+        console.error('获取日志失败:', error);
+      }
+    };
+
+    // 立即执行一次
+    fetchData();
+
+    // 每秒轮询
+    pollingIntervalRef.current = setInterval(fetchData, 1000);
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (autoScroll && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, autoScroll]);
+
+  const getLevelColor = (level: string): string => {
+    switch (level.toUpperCase()) {
+      case 'INFO':
+        return 'text-blue-600';
+      case 'WARNING':
+        return 'text-yellow-600';
+      case 'ERROR':
+        return 'text-red-600';
       default:
-        return 'default';
+        return 'text-gray-600';
     }
   };
 
-  const getActionLabel = (action: LogAction): string => {
-    const labels: Record<LogAction, string> = {
-      task_create: '创建任务',
-      task_start: '启动任务',
-      task_pause: '暂停任务',
-      task_resume: '恢复任务',
-      task_complete: '完成任务',
-      task_fail: '任务失败',
-      task_cancel: '取消任务',
-      login_init: '初始化登录',
-      login_qrcode_get: '获取二维码',
-      login_qrcode_refresh: '刷新二维码',
-      login_check: '检查登录',
-      login_success: '登录成功',
-      login_fail: '登录失败',
-      candidate_search: '搜索候选人',
-      candidate_contact: '联系候选人',
-      candidate_contact_success: '联系成功',
-      candidate_contact_fail: '联系失败',
-      system_init: '系统初始化',
-      system_cleanup: '系统清理',
-      system_error: '系统错误',
-    };
-    return labels[action] || action;
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'idle':
+        return <Badge variant="outline">空闲</Badge>;
+      case 'running':
+        return <Badge className="bg-green-500">运行中</Badge>;
+      case 'completed':
+        return <Badge className="bg-blue-500">已完成</Badge>;
+      case 'error':
+        return <Badge variant="destructive">错误</Badge>;
+      case 'cancelled':
+        return <Badge variant="secondary">已取消</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }).format(date);
+  const formatTime = (timestamp: string): string => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('zh-CN', { hour12: false });
   };
 
-  const totalPages = Math.ceil(total / limit);
+  const formatElapsedTime = (seconds: number | null): string => {
+    if (!seconds) return '-';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}分${secs}秒`;
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">运行日志</h1>
-        <p className="text-muted-foreground mt-2">查看系统运行历史记录</p>
+    <div className="h-full">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold">运行日志</h1>
+        <p className="text-muted-foreground text-sm">实时显示打招呼任务执行日志</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>日志列表</CardTitle>
-              <CardDescription>共 {total} 条记录</CardDescription>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">级别:</span>
-                <Select
-                  value={levelFilter}
-                  onValueChange={(value) => {
-                    setLevelFilter(value as LogLevel | 'all');
-                    setPage(0);
-                  }}
-                >
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部</SelectItem>
-                    <SelectItem value="debug">Debug</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
-                    <SelectItem value="warning">Warning</SelectItem>
-                    <SelectItem value="error">Error</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
+      {/* 左右布局 */}
+      <div className="grid grid-cols-12 gap-4 h-[calc(100vh-180px)]">
+        {/* 左侧：日志显示区 */}
+        <div className="col-span-8">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle>实时日志</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAutoScroll(!autoScroll)}
+                  >
+                    {autoScroll ? '🔒 自动滚动' : '🔓 手动滚动'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLogs([])}
+                  >
+                    清空日志
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">操作:</span>
-                <Select
-                  value={actionFilter}
-                  onValueChange={(value) => {
-                    setActionFilter(value as LogAction | 'all');
-                    setPage(0);
-                  }}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部</SelectItem>
-                    <SelectItem value="task_create">任务相关</SelectItem>
-                    <SelectItem value="login_success">登录相关</SelectItem>
-                    <SelectItem value="candidate_contact">候选人相关</SelectItem>
-                    <SelectItem value="system_error">系统相关</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={loadLogs} disabled={loading} variant="outline">
-                刷新
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">ID</TableHead>
-                  <TableHead className="w-[100px]">级别</TableHead>
-                  <TableHead className="w-[140px]">操作类型</TableHead>
-                  <TableHead>消息</TableHead>
-                  <TableHead className="w-[120px]">任务</TableHead>
-                  <TableHead className="w-[120px]">用户</TableHead>
-                  <TableHead className="w-[180px]">时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && logs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
-                      加载中...
-                    </TableCell>
-                  </TableRow>
-                ) : logs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+            </CardHeader>
+            <CardContent className="flex-1 p-0 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="p-4 font-mono text-xs space-y-1 bg-gray-950 text-gray-100">
+                  {logs.length === 0 ? (
+                    <div className="text-gray-500 text-center py-8">
                       暂无日志记录
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-mono text-xs">{log.id}</TableCell>
-                      <TableCell>
-                        <Badge variant={getLevelBadgeVariant(log.level)}>
-                          {log.level.toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">{getActionLabel(log.action)}</span>
-                      </TableCell>
-                      <TableCell className="max-w-md">
-                        <div className="truncate" title={log.message}>
-                          {log.message}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {log.task_name ? (
-                          <span className="text-sm text-muted-foreground truncate block">
-                            {log.task_name}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {log.user_name ? (
-                          <span className="text-sm text-muted-foreground truncate block">
-                            {log.user_name}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(log.created_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                    </div>
+                  ) : (
+                    logs.map((log, index) => (
+                      <div key={index} className="flex items-start gap-2 hover:bg-gray-900 px-2 py-1 rounded">
+                        <span className="text-gray-500 shrink-0">
+                          {formatTime(log.timestamp)}
+                        </span>
+                        <span className={`shrink-0 font-semibold ${
+                          log.level === 'INFO' ? 'text-blue-400' :
+                          log.level === 'WARNING' ? 'text-yellow-400' :
+                          log.level === 'ERROR' ? 'text-red-400' :
+                          'text-gray-400'
+                        }`}>
+                          [{log.level}]
+                        </span>
+                        <span className="text-gray-200">{log.message}</span>
+                      </div>
+                    ))
+                  )}
+                  <div ref={logsEndRef} />
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-muted-foreground">
-                第 {page + 1} / {totalPages} 页
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(Math.max(0, page - 1))}
-                  disabled={page === 0 || loading}
-                >
-                  上一页
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                  disabled={page >= totalPages - 1 || loading}
-                >
-                  下一页
-                </Button>
-              </div>
-            </div>
+        {/* 右侧：状态信息区 */}
+        <div className="col-span-4 space-y-4">
+          {/* 任务状态 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">任务状态</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {status ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">当前状态</span>
+                    {getStatusBadge(status.status)}
+                  </div>
+
+                  {status.status === 'running' && (
+                    <>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">进度</span>
+                          <span className="font-semibold">{status.progress.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={status.progress} className="h-2" />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">当前进度</span>
+                        <span className="text-sm font-medium">
+                          {status.current_index} / {status.target_count}
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {status.error_message && (
+                    <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                      {status.error_message}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">加载中...</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 执行统计 */}
+          {status && status.target_count > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">执行统计</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">目标数量</span>
+                  <span className="text-lg font-bold">{status.target_count}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-green-600">成功</span>
+                  <span className="text-lg font-bold text-green-600">
+                    {status.success_count}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-red-600">失败</span>
+                  <span className="text-lg font-bold text-red-600">
+                    {status.failed_count}
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">耗时</span>
+                    <span className="text-sm font-medium">
+                      {formatElapsedTime(status.elapsed_time)}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+
+          {/* 时间信息 */}
+          {status && status.start_time && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">时间信息</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">开始时间</span>
+                  <span className="font-mono text-xs">
+                    {new Date(status.start_time).toLocaleTimeString('zh-CN')}
+                  </span>
+                </div>
+
+                {status.end_time && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">结束时间</span>
+                    <span className="font-mono text-xs">
+                      {new Date(status.end_time).toLocaleTimeString('zh-CN')}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

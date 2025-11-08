@@ -61,9 +61,10 @@ export interface GreetingRecord {
 
 export interface AutomationTask {
   id: number;
+  name: string;
   search_keywords: string;
   filters?: string;
-  greeting_template_id: number;
+  greeting_template_id?: number;
   max_contacts: number;
   delay_min: number;
   delay_max: number;
@@ -80,9 +81,10 @@ export interface AutomationTask {
 }
 
 export interface AutomationTaskCreate {
+  name: string;
   search_keywords: string;
   filters?: string;
-  greeting_template_id: number;
+  greeting_template_id?: number;
   max_contacts?: number;
   delay_min?: number;
   delay_max?: number;
@@ -231,3 +233,47 @@ export interface LogsResponse {
   limit: number;
   offset: number;
 }
+
+export interface Job {
+  encryptJobId: string;
+  description: string;
+  jobId: number;
+  jobType: number;
+  encProjectId: string | null;
+  jobSource: number;
+  jobOnlineStatus: number;
+  positionCode: number;
+  jobName: string;
+  salaryDesc: string;
+  address: string;
+}
+
+export interface JobsResponse {
+  success: boolean;
+  jobs: Job[];
+  total: number;
+  message: string;
+}
+
+export interface GreetingStatus {
+  status: 'idle' | 'running' | 'completed' | 'error' | 'cancelled';
+  target_count: number;
+  current_index: number;
+  success_count: number;
+  failed_count: number;
+  skipped_count: number;
+  progress: number;
+  start_time?: string;
+  end_time?: string;
+  elapsed_time?: number;
+  error_message?: string;
+}
+
+export interface GreetingLogEntry {
+  timestamp: string;
+  level: 'INFO' | 'WARNING' | 'ERROR';
+  message: string;
+}
+
+// 重新导出筛选条件类型
+export * from './filters';

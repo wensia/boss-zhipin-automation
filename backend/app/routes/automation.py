@@ -15,23 +15,37 @@ from app.models.automation_task import (
     TaskStatus
 )
 from app.models.greeting_template import GreetingTemplate
+from app.models.filters import FilterOptions
+from app.models.system_config import SystemConfig
+from app.models.user_account import UserAccount
 from app.services.boss_automation import BossAutomation
 from app.services.logging_service import LoggingService
 from app.models.log_entry import LogAction, LogLevel
+from app.utils.filters_applier import FiltersApplier
 
 router = APIRouter(prefix="/api/automation", tags=["automation"])
 
 # 全局自动化服务实例（单例）
 _automation_service: Optional[BossAutomation] = None
 _current_task_id: Optional[int] = None
+_headless: bool = True  # 默认隐藏浏览器
 
 
-async def get_automation_service() -> BossAutomation:
-    """获取或创建自动化服务实例"""
-    global _automation_service
+async def get_automation_service(headless: Optional[bool] = None) -> BossAutomation:
+    """获取或创建自动化服务实例
+
+    Args:
+        headless: 是否无头模式，None 则使用全局设置
+    """
+    global _automation_service, _headless
+
+    # 如果指定了 headless 参数，更新全局设置
+    if headless is not None:
+        _headless = headless
+
     if _automation_service is None:
         _automation_service = BossAutomation()
-        await _automation_service.initialize(headless=False)
+        await _automation_service.initialize(headless=_headless)
     return _automation_service
 
 
@@ -76,20 +90,22 @@ async def run_automation_task(task_id: int, session: AsyncSession):
                 await session.commit()
                 return
 
-        # 获取问候模板
-        template_result = await session.execute(
-            select(GreetingTemplate).where(
-                GreetingTemplate.id == task.greeting_template_id
+        # 获取问候模板（如果指定）
+        template = None
+        if task.greeting_template_id is not None:
+            template_result = await session.execute(
+                select(GreetingTemplate).where(
+                    GreetingTemplate.id == task.greeting_template_id
+                )
             )
-        )
-        template = template_result.scalar_one_or_none()
+            template = template_result.scalar_one_or_none()
 
-        if not template:
-            task.status = TaskStatus.FAILED
-            task.error_message = "问候模板不存在"
-            session.add(task)
-            await session.commit()
-            return
+            if not template:
+                task.status = TaskStatus.FAILED
+                task.error_message = "问候模板不存在"
+                session.add(task)
+                await session.commit()
+                return
 
         # 解析筛选条件
         import json
@@ -153,11 +169,15 @@ async def run_automation_task(task_id: int, session: AsyncSession):
                 await session.refresh(candidate)
 
             # 生成个性化消息
-            message = template.content
-            message = message.replace('{name}', candidate.name)
-            message = message.replace('{position}', candidate.position)
-            if candidate.company:
-                message = message.replace('{company}', candidate.company)
+            if template:
+                message = template.content
+                message = message.replace('{name}', candidate.name)
+                message = message.replace('{position}', candidate.position)
+                if candidate.company:
+                    message = message.replace('{company}', candidate.company)
+            else:
+                # 使用默认消息
+                message = f"你好，我对你的简历很感兴趣，期待与你进一步沟通。"
 
             # 发送问候
             send_success = await automation.send_greeting(
@@ -170,7 +190,7 @@ async def run_automation_task(task_id: int, session: AsyncSession):
             greeting_record = GreetingRecord(
                 candidate_id=candidate.id,
                 task_id=task.id,
-                template_id=template.id,
+                template_id=template.id if template else None,
                 message=message,
                 success=send_success,
                 sent_at=datetime.now(),
@@ -234,16 +254,17 @@ async def create_task(
     session: AsyncSession = Depends(get_session)
 ):
     """创建新的自动化任务"""
-    # 验证模板是否存在
-    result = await session.execute(
-        select(GreetingTemplate).where(
-            GreetingTemplate.id == task_data.greeting_template_id
+    # 如果指定了模板ID，验证模板是否存在
+    if task_data.greeting_template_id is not None:
+        result = await session.execute(
+            select(GreetingTemplate).where(
+                GreetingTemplate.id == task_data.greeting_template_id
+            )
         )
-    )
-    template = result.scalar_one_or_none()
+        template = result.scalar_one_or_none()
 
-    if not template:
-        raise HTTPException(status_code=404, detail="问候模板不存在")
+        if not template:
+            raise HTTPException(status_code=404, detail="问候模板不存在")
 
     # 创建任务
     task = AutomationTask(
@@ -440,12 +461,50 @@ async def cancel_task(
 @router.get("/status")
 async def get_automation_status():
     """获取自动化服务状态"""
-    global _automation_service, _current_task_id
+    global _automation_service, _current_task_id, _headless
 
     return {
         "service_initialized": _automation_service is not None,
         "is_logged_in": _automation_service.is_logged_in if _automation_service else False,
-        "current_task_id": _current_task_id
+        "current_task_id": _current_task_id,
+        "headless": _headless
+    }
+
+
+@router.post("/init")
+async def initialize_browser(
+    headless: bool = True,
+    com_id: Optional[int] = None
+):
+    """初始化浏览器
+
+    Args:
+        headless: 是否无头模式（隐藏浏览器窗口）
+        com_id: 可选的账号com_id，用于加载该账号的登录状态
+
+    Returns:
+        初始化结果
+    """
+    global _automation_service, _headless
+
+    # 如果已经初始化，先清理
+    if _automation_service is not None:
+        await _automation_service.cleanup()
+        _automation_service = None
+
+    # 设置 headless 模式
+    _headless = headless
+
+    # 创建自动化服务实例，如果指定了com_id则使用该账号
+    _automation_service = BossAutomation(com_id=com_id)
+    await _automation_service.initialize(headless=headless)
+
+    return {
+        "success": True,
+        "message": f"浏览器初始化成功{f'（使用账号 {com_id}）' if com_id else ''}",
+        "headless": headless,
+        "service_initialized": True,
+        "com_id": com_id
     }
 
 
@@ -471,14 +530,8 @@ async def get_qrcode():
     """获取登录二维码"""
     automation = await get_automation_service()
 
-    if automation.is_logged_in:
-        return {
-            "success": False,
-            "qrcode": "",
-            "message": "已登录，无需扫码"
-        }
-
-    # 获取二维码
+    # 直接调用 get_qrcode，让它自己判断是否需要二维码
+    # 不在路由层面检查 is_logged_in，因为这个标志可能过期
     result = await automation.get_qrcode()
     return result
 
@@ -520,6 +573,16 @@ async def refresh_qrcode():
     return result
 
 
+@router.get("/jobs")
+async def get_chatted_jobs():
+    """获取已沟通的职位列表"""
+    automation = await get_automation_service()
+
+    # 获取职位列表
+    result = await automation.get_chatted_jobs()
+    return result
+
+
 @router.post("/cleanup")
 async def cleanup_service():
     """清理自动化服务"""
@@ -533,3 +596,358 @@ async def cleanup_service():
         _automation_service = None
 
     return {"message": "服务已清理"}
+
+
+@router.get("/recommend-candidates")
+async def get_recommend_candidates(
+    max_results: int = 50,
+    session: AsyncSession = Depends(get_session)
+):
+    """获取推荐候选人列表
+
+    Args:
+        max_results: 最大候选人数量（默认 50）
+
+    Returns:
+        推荐候选人列表
+    """
+    automation = await get_automation_service()
+
+    if not automation.is_logged_in:
+        raise HTTPException(status_code=401, detail="未登录，无法获取推荐候选人")
+
+    try:
+        # 获取推荐候选人
+        candidates = await automation.get_recommended_candidates(max_results=max_results)
+
+        # 记录日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.SEARCH,
+            message=f"获取推荐候选人列表，返回 {len(candidates)} 个结果",
+            level=LogLevel.INFO,
+            details={
+                "max_results": max_results,
+                "actual_results": len(candidates)
+            }
+        )
+
+        return {
+            "success": True,
+            "count": len(candidates),
+            "candidates": candidates
+        }
+
+    except Exception as e:
+        # 记录错误日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.ERROR,
+            message=f"获取推荐候选人失败: {str(e)}",
+            level=LogLevel.ERROR,
+            details={"error": str(e)}
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取推荐候选人失败: {str(e)}"
+        )
+
+
+@router.get("/available-jobs")
+async def get_available_jobs(session: AsyncSession = Depends(get_session)):
+    """获取当前可用的招聘职位列表
+
+    Returns:
+        职位列表
+    """
+    automation = await get_automation_service()
+
+    if not automation.is_logged_in:
+        raise HTTPException(status_code=401, detail="未登录，无法获取职位列表")
+
+    try:
+        # 获取可用职位
+        result = await automation.get_available_jobs()
+
+        # 记录日志
+        if result.get('success'):
+            logging_service = LoggingService(session)
+            await logging_service.log(
+                action=LogAction.SEARCH,
+                message=f"获取可用职位列表，返回 {result.get('total', 0)} 个职位",
+                level=LogLevel.INFO,
+                details={
+                    "total_jobs": result.get('total', 0)
+                }
+            )
+
+        return result
+
+    except Exception as e:
+        # 记录错误日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.ERROR,
+            message=f"获取职位列表失败: {str(e)}",
+            level=LogLevel.ERROR,
+            details={"error": str(e)}
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取职位列表失败: {str(e)}"
+        )
+
+
+@router.post("/select-job")
+async def select_job(
+    job_value: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """选择指定的招聘职位
+
+    Args:
+        job_value: 职位的 value 属性值
+
+    Returns:
+        选择结果
+    """
+    automation = await get_automation_service()
+
+    if not automation.is_logged_in:
+        raise HTTPException(status_code=401, detail="未登录，无法选择职位")
+
+    try:
+        # 选择职位
+        result = await automation.select_job_position(job_value=job_value)
+
+        # 记录日志
+        if result.get('success'):
+            logging_service = LoggingService(session)
+            await logging_service.log(
+                action=LogAction.SEARCH,
+                message=f"选择职位成功: {job_value}",
+                level=LogLevel.INFO,
+                details={
+                    "job_value": job_value
+                }
+            )
+        else:
+            logging_service = LoggingService(session)
+            await logging_service.log(
+                action=LogAction.ERROR,
+                message=f"选择职位失败: {result.get('message')}",
+                level=LogLevel.WARNING,
+                details={
+                    "job_value": job_value,
+                    "error": result.get('message')
+                }
+            )
+
+        return result
+
+    except Exception as e:
+        # 记录错误日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.ERROR,
+            message=f"选择职位失败: {str(e)}",
+            level=LogLevel.ERROR,
+            details={
+                "job_value": job_value,
+                "error": str(e)
+            }
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"选择职位失败: {str(e)}"
+        )
+
+
+@router.post("/apply-filters")
+async def apply_filters(
+    filters: FilterOptions,
+    session: AsyncSession = Depends(get_session)
+):
+    """应用筛选条件到推荐页面
+
+    Args:
+        filters: 筛选条件对象
+
+    Returns:
+        应用结果
+    """
+    automation = await get_automation_service()
+
+    if not automation.is_logged_in:
+        raise HTTPException(status_code=401, detail="未登录，无法应用筛选条件")
+
+    try:
+        import asyncio
+
+        # 导航到推荐页面
+        await automation.navigate_to_recommend_page()
+        await asyncio.sleep(3)
+
+        # 获取 iframe
+        recommend_frame = None
+        for frame in automation.page.frames:
+            if frame.name == 'recommendFrame':
+                recommend_frame = frame
+                break
+
+        if not recommend_frame:
+            raise HTTPException(status_code=500, detail="未找到推荐页面 iframe")
+
+        # 应用筛选条件
+        applier = FiltersApplier(recommend_frame, automation.page)
+
+        # 打开筛选面板
+        if not await applier.open_filter_panel():
+            raise HTTPException(status_code=500, detail="无法打开筛选面板")
+
+        # 应用所有筛选条件
+        filter_result = await applier.apply_all_filters(filters)
+
+        if not filter_result['success']:
+            raise HTTPException(
+                status_code=500,
+                detail=f"筛选条件应用失败: {filter_result.get('error', 'Unknown error')}"
+            )
+
+        # 记录日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.SEARCH,
+            message=f"应用筛选条件成功: {len(filter_result['applied_filters'])} 项",
+            level=LogLevel.INFO,
+            details={
+                "applied_filters": filter_result['applied_filters'],
+                "failed_filters": filter_result['failed_filters']
+            }
+        )
+
+        return {
+            "success": True,
+            "message": f"成功应用 {len(filter_result['applied_filters'])} 项筛选条件",
+            "applied_count": len(filter_result['applied_filters']),
+            "failed_count": len(filter_result['failed_filters']),
+            "details": filter_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 记录错误日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.ERROR,
+            message=f"应用筛选条件失败: {str(e)}",
+            level=LogLevel.ERROR,
+            details={"error": str(e)}
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"应用筛选条件失败: {str(e)}"
+        )
+
+
+@router.post("/switch-account/{account_id}")
+async def switch_automation_account(
+    account_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    切换自动化服务使用的账号
+
+    Args:
+        account_id: 要切换到的账号ID
+        session: 数据库会话
+
+    Returns:
+        切换结果
+    """
+    try:
+        # 获取账号信息
+        result = await session.execute(
+            select(UserAccount).where(UserAccount.id == account_id)
+        )
+        account = result.scalar_one_or_none()
+
+        if not account:
+            raise HTTPException(status_code=404, detail="账号不存在")
+
+        # 获取自动化服务
+        automation = await get_automation_service()
+
+        if not automation:
+            raise HTTPException(status_code=500, detail="自动化服务未初始化")
+
+        # 执行账号切换
+        switch_result = await automation.switch_account(account.com_id)
+
+        if not switch_result.get('success'):
+            # 切换失败
+            return {
+                "success": False,
+                "message": switch_result.get('message', '切换失败'),
+                "needs_login": switch_result.get('needs_login', False)
+            }
+
+        # 切换成功，更新系统配置中的当前账号ID
+        config_result = await session.execute(select(SystemConfig))
+        config = config_result.scalar_one_or_none()
+
+        if not config:
+            config = SystemConfig()
+            session.add(config)
+
+        config.current_account_id = account_id
+        config.updated_at = datetime.now()
+        await session.commit()
+
+        # 记录日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.SYSTEM,
+            message=f"切换账号成功: {account.show_name}",
+            level=LogLevel.INFO,
+            details={
+                "account_id": account_id,
+                "com_id": account.com_id,
+                "show_name": account.show_name
+            }
+        )
+
+        return {
+            "success": True,
+            "message": "账号切换成功",
+            "account": {
+                "id": account.id,
+                "com_id": account.com_id,
+                "show_name": account.show_name,
+                "avatar": account.avatar,
+                "company_name": account.company_short_name
+            },
+            "user_info": switch_result.get('user_info')
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 记录错误日志
+        logging_service = LoggingService(session)
+        await logging_service.log(
+            action=LogAction.ERROR,
+            message=f"切换账号失败: {str(e)}",
+            level=LogLevel.ERROR,
+            details={"error": str(e), "account_id": account_id}
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"切换账号失败: {str(e)}"
+        )

@@ -30,6 +30,10 @@ async def init_db():
     from app.models.greeting_template import GreetingTemplate
     from app.models.system_config import SystemConfig
     from app.models.log_entry import LogEntry
+    from app.models.user_account import UserAccount
+    from app.models.notification_config import NotificationConfig
+    from app.models.filters import FilterOptions
+    from app.models.automation_template import AutomationTemplate
 
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

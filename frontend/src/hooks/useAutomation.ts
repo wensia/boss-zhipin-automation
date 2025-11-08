@@ -10,6 +10,7 @@ import type {
   TaskStatus,
   UserInfo,
 } from '@/types';
+import type { FilterOptions } from '@/types/filters';
 
 export function useAutomation() {
   const [loading, setLoading] = useState(false);
@@ -171,6 +172,33 @@ export function useAutomation() {
     }
   }, []);
 
+  const initBrowser = useCallback(async (
+    headless: boolean = true,
+    com_id?: number
+  ): Promise<{
+    success: boolean;
+    message: string;
+    headless: boolean;
+    service_initialized: boolean;
+    com_id?: number;
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ headless: headless.toString() });
+      if (com_id) {
+        params.append('com_id', com_id.toString());
+      }
+      return await post(`/automation/init?${params.toString()}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to init browser';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const getQrcode = useCallback(async (): Promise<{
     success: boolean;
     qrcode: string;
@@ -239,6 +267,82 @@ export function useAutomation() {
     }
   }, []);
 
+  const getRecommendedCandidates = useCallback(async (maxResults: number = 50): Promise<{
+    success: boolean;
+    count: number;
+    candidates: any[];
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await get(`/automation/recommend-candidates?max_results=${maxResults}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get recommended candidates';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const getAvailableJobs = useCallback(async (): Promise<{
+    success: boolean;
+    jobs: Array<{ value: string; label: string }>;
+    total: number;
+    message: string;
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await get('/automation/available-jobs');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get available jobs';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const selectJob = useCallback(async (jobValue: string): Promise<{
+    success: boolean;
+    message: string;
+    selected_job?: string;
+    available_jobs?: Array<{ value: string; label: string }>;
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await post(`/automation/select-job?job_value=${encodeURIComponent(jobValue)}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to select job';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const applyFilters = useCallback(async (filters: FilterOptions): Promise<{
+    success: boolean;
+    message: string;
+    applied_count: number;
+    failed_count: number;
+    details?: any;
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await post('/automation/apply-filters', filters);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to apply filters';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -250,10 +354,16 @@ export function useAutomation() {
     cancelTask,
     deleteTask,
     getStatus,
+    initBrowser,
     triggerLogin,
     getQrcode,
+    getQRCode: getQrcode, // 别名，保持向后兼容
     checkLogin,
     refreshQrcode,
     cleanup,
+    getRecommendedCandidates,
+    getAvailableJobs,
+    selectJob,
+    applyFilters,
   };
 }

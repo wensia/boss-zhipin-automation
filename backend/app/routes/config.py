@@ -251,12 +251,12 @@ async def get_system_stats(session: AsyncSession = Depends(get_session)):
     config = await get_or_create_config(session)
 
     # 检查是否需要重置每日计数
-    if config.last_contact_time:
-        last_contact_date = config.last_contact_time.date()
+    if config.last_reset_date:
         today_date = date.today()
 
-        if last_contact_date < today_date:
+        if config.last_reset_date < today_date:
             config.today_contacted = 0
+            config.last_reset_date = today_date
             session.add(config)
             await session.commit()
 

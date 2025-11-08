@@ -63,6 +63,7 @@ export function Tasks() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
   const [newTask, setNewTask] = useState<AutomationTaskCreate>({
+    name: '',
     search_keywords: '',
     greeting_template_id: 0,
     max_contacts: 50,
@@ -102,6 +103,7 @@ export function Tasks() {
       await createTask(newTask);
       setIsCreateDialogOpen(false);
       setNewTask({
+        name: '',
         search_keywords: '',
         greeting_template_id: 0,
         max_contacts: 50,
@@ -203,6 +205,17 @@ export function Tasks() {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">任务名称</Label>
+                <Input
+                  id="name"
+                  placeholder="例如：招聘Python开发工程师"
+                  value={newTask.name}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, name: e.target.value })
+                  }
+                />
+              </div>
               <div className="grid gap-2">
                 <Label htmlFor="keywords">搜索关键词</Label>
                 <Input
@@ -308,6 +321,7 @@ export function Tasks() {
           <TableHeader>
             <TableRow>
               <TableHead>ID</TableHead>
+              <TableHead>任务名称</TableHead>
               <TableHead>关键词</TableHead>
               <TableHead>状态</TableHead>
               <TableHead>进度</TableHead>
@@ -319,7 +333,7 @@ export function Tasks() {
           <TableBody>
             {tasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   暂无任务
                 </TableCell>
               </TableRow>
@@ -327,6 +341,7 @@ export function Tasks() {
               tasks.map((task) => (
                 <TableRow key={task.id}>
                   <TableCell className="font-medium">{task.id}</TableCell>
+                  <TableCell className="font-medium">{task.name}</TableCell>
                   <TableCell>{task.search_keywords}</TableCell>
                   <TableCell>{getStatusBadge(task.status)}</TableCell>
                   <TableCell>

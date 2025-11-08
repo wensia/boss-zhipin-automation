@@ -11,6 +11,7 @@ class SystemConfigBase(SQLModel):
     # Boss 直聘账号配置
     boss_username: Optional[str] = Field(default=None, description="Boss账号")
     boss_session_saved: bool = Field(default=False, description="是否已保存登录状态")
+    current_account_id: Optional[int] = Field(default=None, description="当前激活的账号ID")
 
     # 自动化配置
     auto_mode_enabled: bool = Field(default=False, description="是否启用自动模式")
@@ -45,6 +46,7 @@ class SystemConfigUpdate(SQLModel):
     """更新系统配置的请求模型"""
     boss_username: Optional[str] = None
     boss_session_saved: Optional[bool] = None
+    current_account_id: Optional[int] = None
     auto_mode_enabled: Optional[bool] = None
     daily_limit: Optional[int] = None
     today_contacted: Optional[int] = None

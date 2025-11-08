@@ -45,13 +45,17 @@ async def health_check():
 
 
 # 导入并注册路由
-from app.routes import automation, candidates, templates, config, logs
+from app.routes import automation, candidates, templates, config, logs, greeting, accounts, notification, automation_templates
 
 app.include_router(automation.router)
 app.include_router(candidates.router)
 app.include_router(templates.router)
+app.include_router(automation_templates.router)
 app.include_router(config.router)
 app.include_router(logs.router)
+app.include_router(greeting.router)
+app.include_router(accounts.router)
+app.include_router(notification.router)
 
 
 if __name__ == "__main__":

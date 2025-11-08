@@ -1,0 +1,23 @@
+# Electron
+node_modules/
+dist/
+frontend-dist/
+backend-dist/
+
+# Build files
+*.dmg
+*.app
+*.exe
+*.zip
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

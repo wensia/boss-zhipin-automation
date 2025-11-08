@@ -41,10 +41,14 @@ class LogAction(str, Enum):
     CANDIDATE_CONTACT_SUCCESS = "candidate_contact_success"
     CANDIDATE_CONTACT_FAIL = "candidate_contact_fail"
 
+    # 搜索相关
+    SEARCH = "search"
+
     # 系统相关
     SYSTEM_INIT = "system_init"
     SYSTEM_CLEANUP = "system_cleanup"
     SYSTEM_ERROR = "system_error"
+    ERROR = "error"  # 通用错误
 
 
 class LogEntryBase(SQLModel):

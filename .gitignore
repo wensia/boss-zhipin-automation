@@ -75,3 +75,23 @@ htmlcov/
 # 临时文件
 *.tmp
 *.temp
+*.pid
+.ports
+
+# 临时数据和截图
+backend/data/
+backend/screenshots/
+screenshots/
+
+# 备份文件
+*.backup
+*.bak
+
+# Electron 打包相关
+electron-app/node_modules/
+electron-app/dist/
+electron-app/frontend-dist/
+electron-app/backend-dist/
+electron-app/*.dmg
+electron-app/*.app
+electron-app/*.zip

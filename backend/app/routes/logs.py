@@ -15,7 +15,7 @@ from app.models.log_entry import (
     LogAction,
 )
 
-router = APIRouter(prefix="/logs", tags=["logs"])
+router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 
 @router.get("", response_model=dict)

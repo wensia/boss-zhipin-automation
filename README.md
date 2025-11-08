@@ -30,7 +30,27 @@
 
 ## 快速开始
 
-### 1. 安装依赖
+### 方式 1: Mac 桌面版（推荐给普通用户）
+
+**适用于：** 想直接使用的 Mac 用户，无需安装开发环境
+
+查看 [electron-app/快速测试指南.md](electron-app/快速测试指南.md) 了解详情
+
+```bash
+# 开发模式测试（需要先启动后端和前端）
+cd electron-app
+./start-dev.sh
+
+# 构建分发版本（生成 .dmg 安装包）
+cd electron-app
+npm run build
+```
+
+### 方式 2: Web 开发模式
+
+**适用于：** 开发者，需要修改代码
+
+#### 1. 安装依赖
 
 ```bash
 # 后端
@@ -42,7 +62,7 @@ cd frontend
 npm install
 ```
 
-### 2. 启动服务
+#### 2. 启动服务
 
 ```bash
 # 后端（端口 27421）
@@ -54,7 +74,7 @@ cd frontend
 npm run dev
 ```
 
-### 3. 访问应用
+#### 3. 访问应用
 
 打开浏览器访问: http://localhost:13601
 
@@ -77,6 +97,11 @@ Boss直聘自动化/
 │   │   ├── hooks/          # React Hooks
 │   │   └── types/          # TypeScript 类型
 │   └── package.json
+├── electron-app/           # Mac 桌面版打包（新增）
+│   ├── main.js            # Electron 主进程
+│   ├── package.json       # Electron 配置
+│   ├── scripts/           # 构建脚本
+│   └── README.md          # 详细文档
 └── README.md
 ```
 

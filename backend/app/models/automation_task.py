@@ -23,7 +23,7 @@ class AutomationTaskBase(SQLModel):
     name: str = Field(description="任务名称")
     search_keywords: str = Field(description="搜索关键词")
     filters: Optional[str] = Field(default=None, description="筛选条件（JSON字符串）")
-    greeting_template_id: int = Field(foreign_key="greeting_templates.id", description="打招呼模板ID")
+    greeting_template_id: Optional[int] = Field(default=None, foreign_key="greeting_templates.id", description="打招呼模板ID（可选）")
 
     # 执行配置
     max_contacts: int = Field(default=50, description="最大沟通数量")
@@ -60,7 +60,7 @@ class AutomationTaskCreate(SQLModel):
     name: str
     search_keywords: str
     filters: Optional[str] = None
-    greeting_template_id: int
+    greeting_template_id: Optional[int] = None
     max_contacts: int = 50
     delay_min: int = 2
     delay_max: int = 5
