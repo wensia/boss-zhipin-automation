@@ -1,5 +1,5 @@
 # 项目端口配置
 # 此文件在首次创建启停脚本时生成，请勿随意修改
 
-FRONTEND_PORT=8999
+FRONTEND_PORT=17890
 BACKEND_PORT=8998
