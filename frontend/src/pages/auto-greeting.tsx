@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Play, Square, RotateCcw, Info, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Play, Square, RotateCcw, Info, CheckCircle, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 
 interface GreetingStatus {
   status: string;
@@ -65,12 +65,12 @@ export default function AutoGreetingPage() {
       pollingIntervalRef.current = setInterval(async () => {
         try {
           // 获取状态
-          const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+          const statusRes = await fetch('/api/greeting/status');
           const statusData = await statusRes.json();
           setStatus(statusData);
 
           // 获取日志
-          const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+          const logsRes = await fetch('/api/greeting/logs?last_n=100');
           const logsData = await logsRes.json();
           setLogs(logsData.logs);
 
@@ -90,11 +90,11 @@ export default function AutoGreetingPage() {
     // 初始加载状态
     const fetchInitialStatus = async () => {
       try {
-        const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+        const statusRes = await fetch('/api/greeting/status');
         const statusData = await statusRes.json();
         setStatus(statusData);
 
-        const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+        const logsRes = await fetch('/api/greeting/logs?last_n=100');
         const logsData = await logsRes.json();
         setLogs(logsData.logs);
 
@@ -128,7 +128,7 @@ export default function AutoGreetingPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:27421/api/greeting/start', {
+      const response = await fetch('/api/greeting/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -146,11 +146,11 @@ export default function AutoGreetingPage() {
 
         pollingIntervalRef.current = setInterval(async () => {
           try {
-            const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+            const statusRes = await fetch('/api/greeting/status');
             const statusData = await statusRes.json();
             setStatus(statusData);
 
-            const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+            const logsRes = await fetch('/api/greeting/logs?last_n=100');
             const logsData = await logsRes.json();
             setLogs(logsData.logs);
 
@@ -177,7 +177,7 @@ export default function AutoGreetingPage() {
 
   const handleStop = async () => {
     try {
-      const response = await fetch('http://localhost:27421/api/greeting/stop', {
+      const response = await fetch('/api/greeting/stop', {
         method: 'POST'
       });
 
@@ -198,13 +198,13 @@ export default function AutoGreetingPage() {
 
   const handleReset = async () => {
     try {
-      const response = await fetch('http://localhost:27421/api/greeting/reset', {
+      const response = await fetch('/api/greeting/reset', {
         method: 'POST'
       });
 
       if (response.ok) {
         setLogs([]);
-        const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+        const statusRes = await fetch('/api/greeting/status');
         const statusData = await statusRes.json();
         setStatus(statusData);
       } else {
@@ -214,6 +214,44 @@ export default function AutoGreetingPage() {
     } catch (error) {
       console.error('Failed to reset:', error);
       alert('重置失败');
+    }
+  };
+
+  const handleForceReset = async () => {
+    const confirmed = window.confirm(
+      '⚠️ 强制重置将立即停止所有正在运行的任务并清空状态。\n\n' +
+      '这个操作用于修复任务卡在"运行中"状态但实际已停止的问题。\n\n' +
+      '确定要继续吗？'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/greeting/force-reset', {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        setLogs([]);
+        // 停止轮询
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        // 刷新状态
+        const statusRes = await fetch('/api/greeting/status');
+        const statusData = await statusRes.json();
+        setStatus(statusData);
+        alert('✅ 强制重置成功');
+      } else {
+        const data = await response.json();
+        alert(data.detail || '强制重置失败');
+      }
+    } catch (error) {
+      console.error('Failed to force reset:', error);
+      alert('强制重置失败');
     }
   };
 
@@ -333,6 +371,17 @@ export default function AutoGreetingPage() {
                 <RotateCcw className="h-4 w-4 mr-2" />
                 重置
               </Button>
+
+              {status.status === 'running' && (
+                <Button
+                  onClick={handleForceReset}
+                  variant="destructive"
+                  className="w-full"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  强制重置（用于修复卡死状态）
+                </Button>
+              )}
 
               {status.error_message && (
                 <Alert variant="destructive">

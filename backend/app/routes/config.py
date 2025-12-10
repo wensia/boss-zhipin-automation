@@ -9,6 +9,7 @@ from datetime import datetime, date
 
 from app.database import get_session
 from app.models.system_config import SystemConfig, SystemConfigUpdate
+from app.services.feishu_service import FeishuBitableService
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -358,4 +359,109 @@ async def get_system_stats(session: AsyncSession = Depends(get_session)):
             "total": total_templates,
             "active": active_templates
         }
+    }
+
+
+@router.post("/feishu/test-connection")
+async def test_feishu_connection(session: AsyncSession = Depends(get_session)):
+    """测试飞书多维表格连接"""
+    config = await get_or_create_config(session)
+
+    # 检查配置是否完整
+    if not all([
+        config.feishu_app_id,
+        config.feishu_app_secret,
+        config.feishu_app_token,
+        config.feishu_table_id
+    ]):
+        return {
+            "success": False,
+            "message": "请先完整填写飞书配置信息"
+        }
+
+    try:
+        # 创建飞书服务实例
+        feishu_service = FeishuBitableService(
+            app_id=config.feishu_app_id,
+            app_secret=config.feishu_app_secret
+        )
+
+        # 尝试获取token并获取字段列表来验证连接
+        fields = await feishu_service.list_fields(
+            app_token=config.feishu_app_token,
+            table_id=config.feishu_table_id
+        )
+
+        return {
+            "success": True,
+            "message": f"连接成功！数据表共有 {len(fields)} 个字段",
+            "fields_count": len(fields),
+            "fields": [{"name": f.get("field_name"), "type": f.get("type")} for f in fields]
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"连接失败: {str(e)}"
+        }
+
+
+@router.post("/feishu/sync-fields")
+async def sync_feishu_fields(session: AsyncSession = Depends(get_session)):
+    """同步飞书多维表格字段结构（创建缺失的字段）"""
+    config = await get_or_create_config(session)
+
+    # 检查配置是否完整
+    if not all([
+        config.feishu_app_id,
+        config.feishu_app_secret,
+        config.feishu_app_token,
+        config.feishu_table_id
+    ]):
+        return {
+            "success": False,
+            "message": "请先完整填写飞书配置信息"
+        }
+
+    try:
+        # 创建飞书服务实例
+        feishu_service = FeishuBitableService(
+            app_id=config.feishu_app_id,
+            app_secret=config.feishu_app_secret
+        )
+
+        # 同步字段
+        result = await feishu_service.sync_greeting_record_fields(
+            app_token=config.feishu_app_token,
+            table_id=config.feishu_table_id
+        )
+
+        return {
+            "success": True,
+            "message": f"字段同步完成: 已存在 {len(result['existing'])} 个, 新创建 {len(result['created'])} 个, 失败 {len(result['failed'])} 个",
+            "result": result
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"同步失败: {str(e)}"
+        }
+
+
+@router.post("/feishu/toggle")
+async def toggle_feishu(session: AsyncSession = Depends(get_session)):
+    """切换飞书多维表格同步开关"""
+    config = await get_or_create_config(session)
+
+    config.feishu_enabled = not config.feishu_enabled
+    config.updated_at = datetime.now()
+
+    session.add(config)
+    await session.commit()
+
+    return {
+        "success": True,
+        "message": f"飞书同步已{'启用' if config.feishu_enabled else '禁用'}",
+        "feishu_enabled": config.feishu_enabled
     }

@@ -79,7 +79,7 @@ class GreetingTaskManager:
             "success_count": self.success_count,
             "failed_count": self.failed_count,
             "skipped_count": self.skipped_count,
-            "progress": (self.current_index / self.target_count * 100) if self.target_count > 0 else 0,
+            "progress": min((self.success_count / self.target_count * 100) if self.target_count > 0 else 0, 100),
             "start_time": self.start_time.isoformat() if self.start_time else None,
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "elapsed_time": elapsed_time,
@@ -161,44 +161,61 @@ class GreetingTaskManager:
             self.add_log("INFO", "✅ 找到推荐页面iframe")
 
             # 逐个处理候选人，直到成功打招呼达到目标数量
-            card_index = 0
+            # 使用已处理集合追踪（解决虚拟滚动问题）
+            processed_ids = set()  # 已处理候选人ID集合（名字+期望职位）
+            no_new_candidate_count = 0  # 连续无新候选人计数
             # 动态设置最大尝试次数：目标数量的3倍，最少100，最多1000
             max_attempts = min(max(target_count * 3, 100), 1000)
             self.add_log("INFO", f"📊 目标成功数: {target_count}, 最多尝试: {max_attempts} 个候选人")
 
-            while self.success_count < target_count and card_index < max_attempts:
-                card_index += 1
-                self.current_index = card_index
-
-                self.add_log("INFO", f"📍 处理候选人 #{card_index} (已成功: {self.success_count}/{target_count})")
-
+            while self.success_count < target_count and len(processed_ids) < max_attempts:
                 try:
-                    # 滚动加载（如果需要）
-                    if card_index > 1 and card_index % 5 == 0:
-                        self.add_log("INFO", f"📜 滚动加载更多候选人...")
+                    # 获取当前可见的所有候选人卡片
+                    cards = await recommend_frame.locator('ul.card-list > li').all()
+
+                    # 找第一个未处理的候选人
+                    card = None
+                    candidate_name = None
+                    candidate_id = None
+                    for c in cards:
+                        try:
+                            name_el = c.locator('.name').first
+                            if await name_el.count() > 0:
+                                name = await name_el.inner_text()
+                                # 提取期望职位用于组合ID（避免重名冲突）
+                                expected_pos = await self._extract_expected_position(c)
+                                cid = f"{name}|{expected_pos or ''}"
+                                if cid not in processed_ids:
+                                    card = c
+                                    candidate_name = name
+                                    candidate_id = cid
+                                    break
+                        except:
+                            continue
+
+                    # 如果没找到未处理的候选人，滚动加载更多
+                    if card is None:
+                        no_new_candidate_count += 1
+                        if no_new_candidate_count >= 3:
+                            self.add_log("WARNING", "⚠️ 连续3次滚动未找到新候选人，可能已到达列表末尾")
+                            break
+                        self.add_log("INFO", "📜 滚动加载更多候选人...")
                         await recommend_frame.evaluate("""
-                            window.scrollTo({
-                                top: document.documentElement.scrollHeight,
-                                behavior: 'smooth'
-                            });
+                            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
                         """)
                         await asyncio.sleep(2)
+                        continue
 
-                    # 使用正确的选择器：ul.card-list > li:nth-child(n)
-                    selector = f'ul.card-list > li:nth-child({card_index})'
-                    card = recommend_frame.locator(selector).first
+                    no_new_candidate_count = 0  # 重置计数
+                    processed_ids.add(candidate_id)  # 标记为已处理
+                    self.current_index = len(processed_ids)
 
-                    # 确保卡片可见
-                    await card.wait_for(state='visible', timeout=5000)
-
-                    # 获取候选人名字
-                    name_el = card.locator('.name').first
-                    candidate_name = await name_el.inner_text() if await name_el.count() > 0 else f"候选人{card_index}"
+                    self.add_log("INFO", f"📍 处理候选人 #{len(processed_ids)} {candidate_name} (已成功: {self.success_count}/{target_count})")
 
                     # 职位匹配筛选（如果启用）
                     if self.expected_positions:
-                        # 提取候选人期望职位
-                        expected_pos = await self._extract_expected_position(card)
+                        # 从候选人ID中提取期望职位（已在查找时提取）
+                        expected_pos = candidate_id.split('|')[1] if '|' in candidate_id else None
 
                         if not expected_pos:
                             # 候选人没有期望职位信息，跳过
@@ -216,8 +233,43 @@ class GreetingTaskManager:
                         # 职位匹配，记录日志
                         self.add_log("INFO", f"✅ {candidate_name}: 期望职位匹配({expected_pos})")
 
-                    self.add_log("INFO", f"🖱️  点击候选人: {candidate_name}")
-                    await card.click()
+                    self.add_log("INFO", f"🖱️  准备点击候选人: {candidate_name}")
+
+                    # 确保没有对话框阻挡
+                    if await self._ensure_no_blocking_dialogs(recommend_frame):
+                        self.add_log("INFO", "已清理阻挡的对话框")
+                        await asyncio.sleep(0.5)  # 额外延迟确保DOM稳定
+
+                    # 点击候选人卡片，带重试机制
+                    click_success = False
+                    try:
+                        await card.click()
+                        self.add_log("INFO", f"✅ 已点击候选人: {candidate_name}")
+                        click_success = True
+                    except Exception as e:
+                        error_str = str(e)
+                        self.add_log("ERROR", f"❌ 点击候选人失败: {error_str}")
+
+                        # 检测是否是对话框拦截错误
+                        if 'intercept' in error_str.lower() or 'covering' in error_str.lower() or 'pointer-events' in error_str.lower():
+                            self.add_log("WARNING", "检测到对话框阻挡，尝试清理并重试...")
+                            # 再次清理对话框
+                            await self._ensure_no_blocking_dialogs(recommend_frame)
+                            await asyncio.sleep(1.0)
+
+                            # 重试一次
+                            try:
+                                await card.click()
+                                self.add_log("INFO", "✅ 重试点击成功")
+                                click_success = True
+                            except Exception as retry_error:
+                                self.add_log("ERROR", f"❌ 重试失败: {str(retry_error)}")
+
+                    # 如果点击失败，跳过此候选人
+                    if not click_success:
+                        self.failed_count += 1
+                        self.add_log("ERROR", f"❌ 跳过候选人 {card_index}（点击失败）")
+                        continue
 
                     # 随机延迟：模拟人类点击后的等待（1-2秒）
                     delay = random_delay(1.0, 2.0)
@@ -292,6 +344,7 @@ class GreetingTaskManager:
                         'button.boss-popup__close',
                     ]
 
+                    close_success = False
                     for selector in close_selectors:
                         try:
                             close_btn = recommend_frame.locator(selector).first
@@ -301,10 +354,30 @@ class GreetingTaskManager:
                                 await asyncio.sleep(delay)
 
                                 await close_btn.click()
-                                self.add_log("INFO", "✅ 已关闭简历面板")
+                                self.add_log("INFO", "✅ 已点击关闭按钮")
+
+                                # 等待对话框完全消失
+                                try:
+                                    await recommend_frame.locator('.dialog-lib-resume').wait_for(
+                                        state='hidden',
+                                        timeout=2000
+                                    )
+                                    self.add_log("INFO", "✅ 简历面板已完全关闭")
+                                    close_success = True
+                                except:
+                                    # 超时，但认为关闭成功
+                                    self.add_log("INFO", "⏱️ 对话框关闭超时，继续执行")
+                                    close_success = True
+
                                 break
-                        except:
+                        except Exception as e:
+                            logger.warning(f"关闭对话框失败: {e}")
                             continue
+
+                    if not close_success:
+                        self.add_log("WARNING", "⚠️ 未能关闭简历面板")
+                        # 强制等待，给对话框时间关闭
+                        await asyncio.sleep(2.0)
 
                     # 随机延迟：模拟人类返回列表后的思考时间（1-2秒）
                     delay = random_delay(1.0, 2.0)
@@ -323,7 +396,7 @@ class GreetingTaskManager:
                 except Exception as e:
                     self.failed_count += 1
                     self.add_log("ERROR", f"❌ 候选人 {self.current_index} 出错: {str(e)}")
-                    logger.error(f"处理候选人 {card_index} 时出错", exc_info=True)
+                    logger.error(f"处理候选人 {self.current_index} 时出错", exc_info=True)
 
             # 任务完成
             if not self.limit_reached:
@@ -331,7 +404,7 @@ class GreetingTaskManager:
             self.end_time = datetime.now()
             elapsed = (self.end_time - self.start_time).total_seconds()
 
-            total_processed = card_index
+            total_processed = len(processed_ids)
             if self.limit_reached:
                 self.add_log("INFO", f"⚠️ 任务已停止（触发打招呼限制）")
             else:
@@ -354,8 +427,38 @@ class GreetingTaskManager:
             logger.error(f"打招呼任务失败: {e}", exc_info=True)
 
         finally:
+            # 确保状态被清理，防止僵尸任务
+            if self.status == "running":
+                self.status = "error"
+                self.error_message = "任务异常中断"
+                self.end_time = datetime.now()
+                logger.warning("⚠️ 任务在finally块中被清理，可能发生了未捕获的异常")
+
+            # 任务结束后自动重置计数器，为下次运行准备干净的状态
+            # 延迟3秒后重置，让用户有时间查看最终统计
+            async def delayed_reset():
+                await asyncio.sleep(3.0)
+                logger.info("🔄 自动重置计数器，准备下次任务...")
+                # 只重置计数器和状态，保留最后一条日志用于显示
+                self.status = "idle"
+                self.target_count = 0
+                self.current_index = 0
+                self.success_count = 0
+                self.failed_count = 0
+                self.skipped_count = 0
+                self.start_time = None
+                self.end_time = None
+                self.error_message = None
+                self.expected_positions = []
+                self.limit_reached = False
+                # 清空日志，为下次任务准备
+                self.logs.clear()
+                self.add_log("INFO", "✨ 系统已准备好，可以开始新任务")
+
+            # 启动延迟重置任务（不等待完成）
+            asyncio.create_task(delayed_reset())
+
             # 不要关闭浏览器，因为是复用的全局实例
-            pass
 
     async def _extract_expected_position(self, card) -> Optional[str]:
         """
@@ -422,6 +525,55 @@ class GreetingTaskManager:
                 return True
 
         return False
+
+    async def _ensure_no_blocking_dialogs(self, frame) -> bool:
+        """
+        确保没有对话框阻挡操作
+        检测并关闭所有可能阻挡点击的对话框（简历面板、限制弹窗等）
+
+        Args:
+            frame: Playwright frame对象，通常是recommendFrame
+
+        Returns:
+            如果检测到并关闭了对话框返回 True，否则返回 False
+        """
+        try:
+            # 检测所有可能的对话框类型
+            # 格式：(对话框选择器, 关闭按钮选择器)
+            dialog_selectors = [
+                ('.dialog-lib-resume', '.close-icon, .boss-popup__close'),  # 简历对话框
+                ('.business-block-dialog', '.boss-popup__close'),           # 限制弹窗
+                ('[data-type="boss-dialog"]', '.close-icon'),               # 通用Boss对话框
+                ('.dialog-wrap.active', '.close-icon'),                     # 活动对话框
+            ]
+
+            for dialog_sel, close_sel in dialog_selectors:
+                dialog = frame.locator(dialog_sel).first
+                if await dialog.count() > 0 and await dialog.is_visible():
+                    logger.info(f"检测到对话框: {dialog_sel}")
+
+                    # 尝试关闭
+                    close_btn = dialog.locator(close_sel).first
+                    if await close_btn.count() > 0 and await close_btn.is_visible():
+                        await close_btn.click()
+                        logger.info("已点击关闭按钮，等待对话框消失...")
+
+                        # 等待对话框消失
+                        try:
+                            await dialog.wait_for(state='hidden', timeout=2000)
+                            logger.info("✅ 对话框已完全关闭")
+                            return True
+                        except:
+                            # 超时，增加额外延迟
+                            await asyncio.sleep(1.0)
+                            logger.warning("⏱️ 等待对话框关闭超时，继续执行")
+                            return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"检测对话框时出错: {e}")
+            return False
 
     async def _check_limit_dialog(self) -> bool:
         """
@@ -560,6 +712,42 @@ class GreetingTaskManager:
             self.add_log("WARNING", "⚠️ 任务已被用户停止")
 
             # 不要关闭浏览器，因为是复用的全局实例
+
+    def is_stale(self, timeout_minutes: int = 30) -> bool:
+        """
+        检查任务是否超时未完成
+
+        Args:
+            timeout_minutes: 超时分钟数，默认30分钟
+
+        Returns:
+            如果任务运行超过指定时间返回True
+        """
+        if self.status == "running" and self.start_time:
+            elapsed_minutes = (datetime.now() - self.start_time).total_seconds() / 60
+            return elapsed_minutes > timeout_minutes
+        return False
+
+    def reset(self):
+        """
+        重置任务状态（用于异常恢复）
+        """
+        logger.warning("🔄 正在重置任务状态...")
+
+        # 取消正在运行的任务
+        if self.task and not self.task.done():
+            self.task.cancel()
+            logger.info("已取消正在运行的任务")
+
+        # 重置所有状态
+        self.status = "idle"
+        self.error_message = None
+        self.start_time = None
+        self.end_time = None
+        self.task = None
+
+        # 保留统计和日志，以便查看历史
+        logger.info("✅ 任务状态已重置")
 
 
 # 全局单例

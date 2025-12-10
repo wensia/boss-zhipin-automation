@@ -66,10 +66,54 @@ is_running() {
     return 1
 }
 
+# 检查端口是否被占用
+check_port() {
+    local port=$1
+    lsof -i ":$port" -sTCP:LISTEN -t 2>/dev/null
+}
+
+# 清理占用端口的进程
+kill_port_process() {
+    local port=$1
+    local pids=$(check_port "$port")
+
+    if [ -n "$pids" ]; then
+        log_warn "端口 $port 被以下进程占用: $pids"
+        log_info "正在停止占用端口的进程..."
+
+        for pid in $pids; do
+            # 先尝试优雅停止
+            kill "$pid" 2>/dev/null || true
+            sleep 1
+
+            # 如果还在运行，强制停止
+            if ps -p "$pid" > /dev/null 2>&1; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+
+        sleep 1
+
+        # 验证端口已释放
+        if [ -n "$(check_port "$port")" ]; then
+            log_error "无法释放端口 $port"
+            return 1
+        else
+            log_success "已释放端口 $port"
+        fi
+    fi
+    return 0
+}
+
 # 启动前端
 start_frontend() {
     if is_running "$FRONTEND_PID"; then
         log_warn "前端已经在运行中 (PID: $(cat $FRONTEND_PID))"
+        return 1
+    fi
+
+    # 检查并清理端口占用
+    if ! kill_port_process "$FRONTEND_PORT"; then
         return 1
     fi
 
@@ -101,6 +145,11 @@ start_frontend() {
 start_backend() {
     if is_running "$BACKEND_PID"; then
         log_warn "后端已经在运行中 (PID: $(cat $BACKEND_PID))"
+        return 1
+    fi
+
+    # 检查并清理端口占用
+    if ! kill_port_process "$BACKEND_PORT"; then
         return 1
     fi
 

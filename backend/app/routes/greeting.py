@@ -61,7 +61,13 @@ async def start_greeting(request: StartGreetingRequest):
     try:
         # 检查是否已有任务在运行
         if greeting_manager.status == "running":
-            raise HTTPException(status_code=400, detail="已有任务正在运行，请等待完成或停止当前任务")
+            # 检查任务是否超时（超过30分钟自动重置）
+            if greeting_manager.is_stale(timeout_minutes=30):
+                logger.warning("⚠️ 检测到超时任务（超过30分钟），自动重置...")
+                greeting_manager.reset()
+                logger.info("✅ 超时任务已自动重置，继续启动新任务")
+            else:
+                raise HTTPException(status_code=400, detail="已有任务正在运行，请等待完成或停止当前任务")
 
         # 获取全局自动化服务（复用已打开的浏览器）
         automation = await get_automation_service()
@@ -153,3 +159,30 @@ async def reset_greeting():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重置失败: {str(e)}")
+
+
+@router.post("/force-reset", summary="强制重置任务状态")
+async def force_reset_greeting():
+    """
+    强制重置任务状态，即使任务正在运行也会强制停止并重置
+
+    用于处理僵尸任务状态（任务卡在running但实际已停止）
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        logger.warning(f"⚠️ 执行强制重置，当前状态: {greeting_manager.status}")
+
+        # 强制重置（会取消运行中的任务）
+        greeting_manager.reset()
+
+        logger.info("✅ 强制重置完成")
+
+        return {
+            "success": True,
+            "message": "任务状态已强制重置"
+        }
+    except Exception as e:
+        logger.error(f"❌ 强制重置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"强制重置失败: {str(e)}")

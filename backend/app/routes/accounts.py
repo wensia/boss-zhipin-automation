@@ -3,6 +3,7 @@
 """
 import json
 import os
+import httpx
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
@@ -262,3 +263,77 @@ async def verify_account_login(
         "needs_login": False,
         "auth_file": auth_file
     }
+
+
+@router.get("/{account_id}/recruit-data")
+async def get_recruit_data(
+    account_id: int,
+    session: Session = Depends(get_session)
+):
+    """获取账号的招聘数据中心数据"""
+    # 获取账号信息
+    account = await session.get(UserAccount, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="账号不存在")
+
+    # 获取认证文件路径
+    auth_file = BossAutomation.get_auth_file_path(account.com_id)
+    if not os.path.exists(auth_file):
+        raise HTTPException(status_code=400, detail="账号未登录，请先登录")
+
+    # 读取认证信息
+    try:
+        with open(auth_file, 'r', encoding='utf-8') as f:
+            auth_data = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取认证信息失败: {str(e)}")
+
+    # 提取cookies并转换为HTTP请求格式
+    cookies_dict = {}
+    for cookie in auth_data.get('cookies', []):
+        cookies_dict[cookie['name']] = cookie['value']
+
+    # 构建请求头
+    headers = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        'priority': 'u=1, i',
+        'referer': 'https://www.zhipin.com/web/frame/report/data-center',
+        'sec-ch-ua': '"Not=A?Brand";v="24", "Chromium";v="140"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'x-requested-with': 'XMLHttpRequest'
+    }
+
+    # 添加zp_token (从cookies中获取bst的值)
+    if 'bst' in cookies_dict:
+        headers['zp_token'] = cookies_dict['bst']
+
+    # 调用Boss直聘API
+    api_url = 'https://www.zhipin.com/wapi/zpboss/h5/weeklyReportV3/recruitDataCenter/get.json'
+    params = {
+        'jobId': '0',
+        'platform': '1',
+        'date': ''
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                api_url,
+                params=params,
+                headers=headers,
+                cookies=cookies_dict,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"API请求失败: {e.response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取招聘数据失败: {str(e)}")

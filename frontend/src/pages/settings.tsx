@@ -37,6 +37,9 @@ export function Settings() {
     toggleAntiDetection,
     toggleRandomDelay,
     clearLoginInfo,
+    testFeishuConnection,
+    syncFeishuFields,
+    toggleFeishu,
     loading,
   } = useConfig();
   const { getStatus, getQrcode, checkLogin, refreshQrcode } = useAutomation();
@@ -56,6 +59,20 @@ export function Settings() {
     rest_duration: 60,
   });
 
+  // 飞书配置状态
+  const [feishuConfig, setFeishuConfig] = useState({
+    feishu_app_id: '',
+    feishu_app_secret: '',
+    feishu_app_token: '',
+    feishu_table_id: '',
+  });
+  const [feishuTestResult, setFeishuTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [feishuTesting, setFeishuTesting] = useState(false);
+  const [feishuSyncing, setFeishuSyncing] = useState(false);
+
   const loadConfig = async () => {
     try {
       const data = await getConfig();
@@ -64,6 +81,13 @@ export function Settings() {
         daily_limit: data.daily_limit,
         rest_interval: data.rest_interval,
         rest_duration: data.rest_duration,
+      });
+      // 加载飞书配置
+      setFeishuConfig({
+        feishu_app_id: data.feishu_app_id || '',
+        feishu_app_secret: data.feishu_app_secret || '',
+        feishu_app_token: data.feishu_app_token || '',
+        feishu_table_id: data.feishu_table_id || '',
       });
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -119,6 +143,69 @@ export function Settings() {
       await loadConfig();
     } catch (error) {
       console.error('Failed to toggle random delay:', error);
+    }
+  };
+
+  // 飞书配置处理函数
+  const handleSaveFeishuConfig = async () => {
+    try {
+      await updateConfig(feishuConfig);
+      await loadConfig();
+      toast.success('飞书配置已保存');
+      setFeishuTestResult(null);
+    } catch (error) {
+      console.error('Failed to save feishu config:', error);
+      toast.error('保存飞书配置失败');
+    }
+  };
+
+  const handleTestFeishuConnection = async () => {
+    setFeishuTesting(true);
+    setFeishuTestResult(null);
+    try {
+      // 先保存配置
+      await updateConfig(feishuConfig);
+      // 再测试连接
+      const result = await testFeishuConnection();
+      setFeishuTestResult(result);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Failed to test feishu connection:', error);
+      toast.error('测试连接失败');
+    } finally {
+      setFeishuTesting(false);
+    }
+  };
+
+  const handleSyncFeishuFields = async () => {
+    setFeishuSyncing(true);
+    try {
+      const result = await syncFeishuFields();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Failed to sync feishu fields:', error);
+      toast.error('同步字段失败');
+    } finally {
+      setFeishuSyncing(false);
+    }
+  };
+
+  const handleToggleFeishu = async () => {
+    try {
+      const result = await toggleFeishu();
+      await loadConfig();
+      toast.success(result.message);
+    } catch (error) {
+      console.error('Failed to toggle feishu:', error);
+      toast.error('切换飞书同步状态失败');
     }
   };
 
@@ -514,6 +601,150 @@ export function Settings() {
               </span>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* 飞书多维表格配置 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>飞书多维表格</span>
+            <Switch
+              checked={config?.feishu_enabled || false}
+              onCheckedChange={handleToggleFeishu}
+              disabled={loading}
+            />
+          </CardTitle>
+          <CardDescription>
+            配置飞书多维表格，自动同步已打招呼的候选人信息
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="feishu_app_id">App ID</Label>
+            <Input
+              id="feishu_app_id"
+              type="text"
+              placeholder="cli_xxx"
+              value={feishuConfig.feishu_app_id}
+              onChange={(e) =>
+                setFeishuConfig({
+                  ...feishuConfig,
+                  feishu_app_id: e.target.value,
+                })
+              }
+            />
+            <p className="text-sm text-muted-foreground">
+              飞书开放平台应用的 App ID
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="feishu_app_secret">App Secret</Label>
+            <Input
+              id="feishu_app_secret"
+              type="password"
+              placeholder="请输入 App Secret"
+              value={feishuConfig.feishu_app_secret}
+              onChange={(e) =>
+                setFeishuConfig({
+                  ...feishuConfig,
+                  feishu_app_secret: e.target.value,
+                })
+              }
+            />
+            <p className="text-sm text-muted-foreground">
+              飞书开放平台应用的 App Secret
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="feishu_app_token">多维表格 App Token</Label>
+            <Input
+              id="feishu_app_token"
+              type="text"
+              placeholder="从多维表格 URL 中获取"
+              value={feishuConfig.feishu_app_token}
+              onChange={(e) =>
+                setFeishuConfig({
+                  ...feishuConfig,
+                  feishu_app_token: e.target.value,
+                })
+              }
+            />
+            <p className="text-sm text-muted-foreground">
+              多维表格 URL 中的 app_token 参数
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="feishu_table_id">数据表 ID</Label>
+            <Input
+              id="feishu_table_id"
+              type="text"
+              placeholder="从数据表 URL 中获取"
+              value={feishuConfig.feishu_table_id}
+              onChange={(e) =>
+                setFeishuConfig({
+                  ...feishuConfig,
+                  feishu_table_id: e.target.value,
+                })
+              }
+            />
+            <p className="text-sm text-muted-foreground">
+              数据表 URL 中的 table 参数
+            </p>
+          </div>
+
+          {/* 测试结果提示 */}
+          {feishuTestResult && (
+            <div
+              className={`rounded-lg border p-4 ${
+                feishuTestResult.success
+                  ? 'border-green-200 bg-green-50'
+                  : 'border-red-200 bg-red-50'
+              }`}
+            >
+              <p
+                className={`text-sm ${
+                  feishuTestResult.success ? 'text-green-800' : 'text-red-800'
+                }`}
+              >
+                {feishuTestResult.message}
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button onClick={handleSaveFeishuConfig} disabled={loading}>
+              保存配置
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestFeishuConnection}
+              disabled={loading || feishuTesting}
+            >
+              {feishuTesting ? '测试中...' : '测试连接'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleSyncFeishuFields}
+              disabled={loading || feishuSyncing}
+            >
+              {feishuSyncing ? '同步中...' : '同步字段'}
+            </Button>
+          </div>
+
+          {/* 配置说明 */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">配置说明</h4>
+            <div className="text-sm text-blue-700 space-y-1">
+              <p>1. 在飞书开放平台创建应用并获取 App ID 和 App Secret</p>
+              <p>2. 为应用申请「多维表格」相关权限</p>
+              <p>3. 创建多维表格并从 URL 中获取 App Token 和 Table ID</p>
+              <p>4. 点击「同步字段」自动创建所需的表格字段</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

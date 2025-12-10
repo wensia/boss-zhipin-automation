@@ -10,12 +10,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Building2, Mail, Calendar, CheckCircle2, Star } from 'lucide-react';
+import { User, Building2, Mail, Calendar, CheckCircle2, Star, TrendingUp, TrendingDown, RefreshCw, Chrome } from 'lucide-react';
+import axios from 'axios';
+
+interface RecruitData {
+  view: number;
+  viewCTY: number;
+  viewed: number;
+  viewedCTY: number;
+  chat: number;
+  chatCTY: number;
+  chatInitiative: number;
+  chatInitiativeCTY: number;
+  contactMe: number;
+  contactMeCTY: number;
+  resume: number;
+  resumeCTY: number;
+  exchangePhoneAndWeiXin: number;
+  exchangePhoneAndWeiXinCTY: number;
+  interview: number;
+  interviewCTY: number;
+  interviewAccept: number;
+  interviewAcceptCTY: number;
+  chatInitiativeRightsConsumption: number;
+  viewRightsConsumption: number;
+}
 
 export default function Accounts() {
   const { getAccounts, deleteAccount, loading, error } = useAccounts();
   const { currentAccount, switchToAccount, switching } = useCurrentAccount();
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
+  const [recruitDataMap, setRecruitDataMap] = useState<Record<number, RecruitData>>({});
+  const [refreshingMap, setRefreshingMap] = useState<Record<number, boolean>>({});
+  const [openingBrowserMap, setOpeningBrowserMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     loadAccounts();
@@ -25,8 +52,70 @@ export default function Accounts() {
     try {
       const data = await getAccounts();
       setAccounts(data);
+      // 加载每个账号的招聘数据
+      data.forEach((account) => {
+        loadRecruitData(account.id);
+      });
     } catch (err) {
       console.error('加载账号列表失败:', err);
+    }
+  };
+
+  const loadRecruitData = async (accountId: number, showToast: boolean = false) => {
+    try {
+      setRefreshingMap((prev) => ({ ...prev, [accountId]: true }));
+
+      const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+      const response = await axios.get(`${API_BASE_URL}/api/accounts/${accountId}/recruit-data`);
+
+      if (response.data?.zpData?.todayData) {
+        setRecruitDataMap((prev) => ({
+          ...prev,
+          [accountId]: response.data.zpData.todayData,
+        }));
+
+        if (showToast) {
+          toast.success('数据刷新成功');
+        }
+      }
+    } catch (err) {
+      // 忽略错误，某些账号可能未登录
+      console.log(`账号${accountId}招聘数据加载失败:`, err);
+      if (showToast) {
+        toast.error('数据刷新失败，请确保账号已登录');
+      }
+    } finally {
+      setRefreshingMap((prev) => ({ ...prev, [accountId]: false }));
+    }
+  };
+
+  const handleRefreshRecruitData = async (accountId: number) => {
+    await loadRecruitData(accountId, true);
+  };
+
+  const handleOpenBrowser = async (account: UserAccount) => {
+    try {
+      setOpeningBrowserMap((prev) => ({ ...prev, [account.id]: true }));
+      toast.loading(`正在打开${account.show_name}的浏览器窗口...`, { id: `open-browser-${account.id}` });
+
+      const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+      const response = await axios.post(`${API_BASE_URL}/api/automation/init`, null, {
+        params: {
+          headless: false,
+          com_id: account.com_id
+        }
+      });
+
+      if (response.data?.success) {
+        toast.success(`已成功打开${account.show_name}的浏览器窗口`, { id: `open-browser-${account.id}` });
+      } else {
+        toast.error('打开浏览器失败', { id: `open-browser-${account.id}` });
+      }
+    } catch (err) {
+      console.error('打开浏览器失败:', err);
+      toast.error(err instanceof Error ? err.message : '打开浏览器失败', { id: `open-browser-${account.id}` });
+    } finally {
+      setOpeningBrowserMap((prev) => ({ ...prev, [account.id]: false }));
     }
   };
 
@@ -172,6 +261,108 @@ export default function Accounts() {
                   </div>
                 </div>
 
+                {/* 今日招聘数据 */}
+                {recruitDataMap[account.id] && (
+                  <div className="pt-3 border-t space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold text-gray-700">今日招聘数据</div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRefreshRecruitData(account.id)}
+                        disabled={refreshingMap[account.id]}
+                        className="h-7 px-2"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${refreshingMap[account.id] ? 'animate-spin' : ''}`} />
+                        <span className="ml-1 text-xs">刷新</span>
+                      </Button>
+                    </div>
+
+                    {/* 第一行：我看过、看过我、我打招呼 */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-3 border border-cyan-200">
+                        <div className="text-xs text-gray-600 mb-1">我看过</div>
+                        <div className="text-xl font-bold text-gray-900">{recruitDataMap[account.id].view}</div>
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className="text-gray-600">较昨日</span>
+                          <span className={recruitDataMap[account.id].viewCTY >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {recruitDataMap[account.id].viewCTY > 0 ? `+${recruitDataMap[account.id].viewCTY}` : recruitDataMap[account.id].viewCTY}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
+                        <div className="text-xs text-gray-600 mb-1">看过我</div>
+                        <div className="text-xl font-bold text-gray-900">{recruitDataMap[account.id].viewed}</div>
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className="text-gray-600">较昨日</span>
+                          <span className={recruitDataMap[account.id].viewedCTY >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {recruitDataMap[account.id].viewedCTY > 0 ? `+${recruitDataMap[account.id].viewedCTY}` : recruitDataMap[account.id].viewedCTY}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
+                        <div className="text-xs text-gray-600 mb-1">我打招呼</div>
+                        <div className="text-xl font-bold text-gray-900">{recruitDataMap[account.id].chatInitiative}</div>
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className="text-gray-600">较昨日</span>
+                          <span className={recruitDataMap[account.id].chatInitiativeCTY >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {recruitDataMap[account.id].chatInitiativeCTY > 0 ? `+${recruitDataMap[account.id].chatInitiativeCTY}` : recruitDataMap[account.id].chatInitiativeCTY}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 第二行：我沟通、收获简历、交换电话微信、接受面试 */}
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-2 border border-indigo-200">
+                        <div className="text-xs text-gray-600 mb-1">我沟通</div>
+                        <div className="text-lg font-bold text-gray-900">{recruitDataMap[account.id].chat}</div>
+                        <div className="text-xs text-gray-600">较昨 {recruitDataMap[account.id].chatCTY > 0 ? `+${recruitDataMap[account.id].chatCTY}` : recruitDataMap[account.id].chatCTY}</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-2 border border-pink-200">
+                        <div className="text-xs text-gray-600 mb-1">收获简历</div>
+                        <div className="text-lg font-bold text-gray-900">{recruitDataMap[account.id].resume}</div>
+                        <div className="text-xs text-gray-600">较昨 {recruitDataMap[account.id].resumeCTY > 0 ? `+${recruitDataMap[account.id].resumeCTY}` : recruitDataMap[account.id].resumeCTY}</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-2 border border-green-200">
+                        <div className="text-xs text-gray-600 mb-1">交换联系</div>
+                        <div className="text-lg font-bold text-gray-900">{recruitDataMap[account.id].exchangePhoneAndWeiXin}</div>
+                        <div className="text-xs text-gray-600">较昨 {recruitDataMap[account.id].exchangePhoneAndWeiXinCTY > 0 ? `+${recruitDataMap[account.id].exchangePhoneAndWeiXinCTY}` : recruitDataMap[account.id].exchangePhoneAndWeiXinCTY}</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-2 border border-yellow-200">
+                        <div className="text-xs text-gray-600 mb-1">接受面试</div>
+                        <div className="text-lg font-bold text-gray-900">{recruitDataMap[account.id].interview}</div>
+                        <div className="text-xs text-gray-600">较昨 {recruitDataMap[account.id].interviewCTY > 0 ? `+${recruitDataMap[account.id].interviewCTY}` : recruitDataMap[account.id].interviewCTY}</div>
+                      </div>
+                    </div>
+
+                    {/* 权益消耗信息 */}
+                    <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-gray-700">今日权益使用</span>
+                        <Badge variant="outline" className="text-orange-600 border-orange-300">
+                          剩余 {200 - recruitDataMap[account.id].chatInitiativeRightsConsumption} 次
+                        </Badge>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-600">新打招呼次数（去重）</span>
+                          <span className="font-semibold text-gray-900">{recruitDataMap[account.id].chatInitiativeRightsConsumption} 次</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-600">查看候选人</span>
+                          <span className="font-semibold text-gray-900">{recruitDataMap[account.id].viewRightsConsumption} 次</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 操作按钮 */}
                 <div className="flex flex-col gap-2 pt-2">
                   <div className="flex gap-2">
@@ -212,6 +403,18 @@ export default function Accounts() {
                       删除
                     </Button>
                   </div>
+
+                  {/* 打开浏览器按钮 */}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => handleOpenBrowser(account)}
+                    disabled={openingBrowserMap[account.id]}
+                  >
+                    <Chrome className={`h-4 w-4 mr-1 ${openingBrowserMap[account.id] ? 'animate-pulse' : ''}`} />
+                    {openingBrowserMap[account.id] ? '正在打开浏览器...' : '打开浏览器窗口'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

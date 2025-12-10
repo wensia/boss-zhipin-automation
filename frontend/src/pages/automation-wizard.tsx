@@ -43,7 +43,7 @@ type WizardStep = 'browser' | 'login' | 'job-select' | 'configure' | 'confirm';
 
 export default function AutomationWizard() {
   const navigate = useNavigate();
-  const { initBrowser, getQRCode, checkLogin, getAvailableJobs, selectJob, applyFilters } = useAutomation();
+  const { initBrowser, getQRCode, checkLogin, getAvailableJobs, selectJob, applyFilters, refreshQrcode } = useAutomation();
   const { getJobs } = useJobs();
   const { createTemplate } = useAutomationTemplates();
   const { getAccounts, getCurrentAccount } = useAccounts();
@@ -300,7 +300,7 @@ export default function AutomationWizard() {
         const result = await checkLogin();
         if (result.logged_in) {
           clearInterval(loginInterval);
-          clearInterval(qrRefreshInterval);
+          clearInterval(qrCheckInterval);
           clearInterval(timerInterval);
           setIsLoggedIn(true);
           setUserInfo(result.user_info);
@@ -314,42 +314,48 @@ export default function AutomationWizard() {
       }
     }, 2000);
 
-    // 二维码刷新轮询 - 每30秒刷新一次二维码（后端会自动检测过期并刷新）
-    const qrRefreshInterval = setInterval(async () => {
+    // 二维码状态检测 - 每1秒检查一次是否需要刷新
+    const qrCheckInterval = setInterval(async () => {
       // 先检查是否已经达到最大刷新次数
       if (localRefreshCount >= MAX_QR_REFRESH_COUNT) {
         console.error('❌ 二维码刷新超时：已达到最大刷新次数 (5次)');
         clearInterval(loginInterval);
-        clearInterval(qrRefreshInterval);
+        clearInterval(qrCheckInterval);
         clearInterval(timerInterval);
         setQrCodeExpired(true); // 标记二维码已过期
         toast.error('二维码刷新超时，请点击重新登录按钮');
         return;
       }
 
-      localRefreshCount++;
-      setQrRefreshCount(localRefreshCount); // 更新UI显示的刷新次数
-      console.log(`🔄 轮询刷新二维码... (第 ${localRefreshCount}/${MAX_QR_REFRESH_COUNT} 次)`);
-
       try {
-        const qrResult = await getQRCode();
-        if (qrResult.success && qrResult.qrcode) {
-          // 更新二维码显示
-          setQrCode(qrResult.qrcode);
-          console.log(`✅ 二维码已更新 (第 ${localRefreshCount} 次)`);
-        } else {
-          console.warn(`⚠️ 二维码刷新失败 (第 ${localRefreshCount} 次):`, qrResult.message);
+        // 调用后端检查二维码状态
+        const refreshResult = await refreshQrcode();
+
+        if (refreshResult.need_refresh) {
+          // 检测到二维码需要刷新
+          localRefreshCount++;
+          setQrRefreshCount(localRefreshCount);
+          console.log(`🔄 检测到二维码过期，自动刷新... (第 ${localRefreshCount}/${MAX_QR_REFRESH_COUNT} 次)`);
+
+          if (refreshResult.qrcode) {
+            // 更新二维码显示
+            setQrCode(refreshResult.qrcode);
+            console.log(`✅ 二维码已刷新 (第 ${localRefreshCount} 次)`);
+            toast.info(`二维码已自动刷新 (${localRefreshCount}/${MAX_QR_REFRESH_COUNT})`);
+          } else {
+            console.warn(`⚠️ 刷新后未获取到新二维码: ${refreshResult.message}`);
+          }
         }
       } catch (error) {
-        console.error(`❌ 刷新二维码出错 (第 ${localRefreshCount} 次):`, error);
-        // 继续轮询，直到达到最大次数
+        console.error('❌ 检查二维码状态失败:', error);
+        // 继续轮询，不中断
       }
-    }, 30000); // 30秒刷新一次
+    }, 1000); // 每1秒检查一次
 
     // 3分钟后停止轮询（作为备用超时机制）
     setTimeout(() => {
       clearInterval(loginInterval);
-      clearInterval(qrRefreshInterval);
+      clearInterval(qrCheckInterval);
       clearInterval(timerInterval);
       if (localRefreshCount >= MAX_QR_REFRESH_COUNT) {
         console.log('⏱️ 轮询已达到最大次数限制');
@@ -491,7 +497,7 @@ export default function AutomationWizard() {
       toast.info('正在启动打招呼任务...');
 
       // 直接调用 greeting API
-      const response = await fetch('http://localhost:27421/api/greeting/start', {
+      const response = await fetch('/api/greeting/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -575,12 +581,12 @@ export default function AutomationWizard() {
     pollingIntervalRef.current = setInterval(async () => {
       try {
         // 获取状态
-        const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+        const statusRes = await fetch('/api/greeting/status');
         const statusData = await statusRes.json();
         setGreetingStatus(statusData);
 
         // 获取日志
-        const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+        const logsRes = await fetch('/api/greeting/logs?last_n=100');
         const logsData = await logsRes.json();
         setGreetingLogs(logsData.logs);
 
@@ -847,9 +853,14 @@ export default function AutomationWizard() {
                   </span>
                 </div>
               </div>
+              {!qrCodeExpired && (
+                <div className="text-xs text-gray-600">
+                  💡 系统正在每秒检测二维码状态，过期时将自动刷新
+                </div>
+              )}
               {qrRefreshCount > 0 && !qrCodeExpired && (
                 <div className="text-xs text-blue-600">
-                  二维码每30秒自动刷新，最多刷新5次
+                  已自动刷新 {qrRefreshCount} 次（最多5次）
                 </div>
               )}
               {qrCodeExpired && (

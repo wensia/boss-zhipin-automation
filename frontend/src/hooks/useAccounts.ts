@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import type { UserAccount, UserAccountCreate, UserAccountUpdate } from '@/types/account';
 
-const API_BASE_URL = 'http://localhost:27421/api/accounts';
+const API_BASE_URL = '/api/accounts';
 
 export function useAccounts() {
   const [loading, setLoading] = useState(false);
@@ -213,7 +213,7 @@ export function useAccounts() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:27421/api/automation/switch-account/${accountId}`, {
+      const response = await fetch(`/api/automation/switch-account/${accountId}`, {
         method: 'POST',
       });
       if (!response.ok) {

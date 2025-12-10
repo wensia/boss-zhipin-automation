@@ -39,12 +39,12 @@ export default function Logs() {
     const fetchData = async () => {
       try {
         // 获取状态
-        const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+        const statusRes = await fetch('/api/greeting/status');
         const statusData = await statusRes.json();
         setStatus(statusData);
 
         // 获取日志
-        const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+        const logsRes = await fetch('/api/greeting/logs?last_n=100');
         const logsData = await logsRes.json();
         setLogs(logsData.logs || []);
       } catch (error) {

@@ -124,6 +124,12 @@ export interface SystemConfig {
   rest_interval: number;
   rest_duration: number;
   last_contact_time?: string;
+  // 飞书多维表格配置
+  feishu_enabled: boolean;
+  feishu_app_id?: string;
+  feishu_app_secret?: string;
+  feishu_app_token?: string;
+  feishu_table_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -135,6 +141,12 @@ export interface SystemConfigUpdate {
   random_delay_enabled?: boolean;
   rest_interval?: number;
   rest_duration?: number;
+  // 飞书多维表格配置
+  feishu_enabled?: boolean;
+  feishu_app_id?: string;
+  feishu_app_secret?: string;
+  feishu_app_token?: string;
+  feishu_table_id?: string;
 }
 
 export interface CandidateStats {

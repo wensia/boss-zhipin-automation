@@ -25,6 +25,13 @@ class SystemConfigBase(SQLModel):
     rest_interval: int = Field(default=15, description="休息间隔（处理多少个后休息）")
     rest_duration: int = Field(default=60, description="休息时长（秒）")
 
+    # 飞书多维表格配置
+    feishu_enabled: bool = Field(default=False, description="是否启用飞书多维表格同步")
+    feishu_app_id: Optional[str] = Field(default=None, description="飞书应用 App ID")
+    feishu_app_secret: Optional[str] = Field(default=None, description="飞书应用 App Secret")
+    feishu_app_token: Optional[str] = Field(default=None, description="多维表格 App Token")
+    feishu_table_id: Optional[str] = Field(default=None, description="数据表 Table ID")
+
 
 class SystemConfig(SystemConfigBase, table=True):
     """系统配置数据库模型"""
@@ -55,3 +62,9 @@ class SystemConfigUpdate(SQLModel):
     random_delay_enabled: Optional[bool] = None
     rest_interval: Optional[int] = None
     rest_duration: Optional[int] = None
+    # 飞书多维表格配置
+    feishu_enabled: Optional[bool] = None
+    feishu_app_id: Optional[str] = None
+    feishu_app_secret: Optional[str] = None
+    feishu_app_token: Optional[str] = None
+    feishu_table_id: Optional[str] = None

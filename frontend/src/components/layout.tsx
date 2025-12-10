@@ -66,7 +66,7 @@ export function Layout({ children }: LayoutProps) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const statusRes = await fetch('http://localhost:27421/api/greeting/status');
+        const statusRes = await fetch('/api/greeting/status');
         if (!statusRes.ok) {
           // API不可用或没有任务运行，不报错
           return;
@@ -74,7 +74,7 @@ export function Layout({ children }: LayoutProps) {
         const statusData = await statusRes.json();
         setStatus(statusData);
 
-        const logsRes = await fetch('http://localhost:27421/api/greeting/logs?last_n=100');
+        const logsRes = await fetch('/api/greeting/logs?last_n=100');
         if (logsRes.ok) {
           const logsData = await logsRes.json();
           setLogs(logsData.logs || []);

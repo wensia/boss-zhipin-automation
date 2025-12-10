@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { AutomationTemplate, CreateTemplateData } from '@/types/template';
 
-const API_BASE = 'http://localhost:27421';
+const API_BASE = '';
 
 // Re-export types for convenience
 export type { AutomationTemplate, CreateTemplateData };

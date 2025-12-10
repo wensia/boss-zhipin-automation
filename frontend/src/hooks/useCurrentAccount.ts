@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserAccount } from '@/types/account';
 
-const API_BASE_URL = 'http://localhost:27421/api/accounts';
+const API_BASE_URL = '/api/accounts';
 
 export function useCurrentAccount() {
   const [currentAccount, setCurrentAccount] = useState<UserAccount | null>(null);
@@ -55,7 +55,7 @@ export function useCurrentAccount() {
     try {
       // 调用切换账号API
       const response = await fetch(
-        `http://localhost:27421/api/automation/switch-account/${accountId}`,
+        `/api/automation/switch-account/${accountId}`,
         { method: 'POST' }
       );
 

@@ -213,6 +213,68 @@ export function useConfig() {
     }
   }, []);
 
+  const testFeishuConnection = useCallback(async (): Promise<{
+    success: boolean;
+    message: string;
+    fields_count?: number;
+    fields?: Array<{ name: string; type: number }>;
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await post('/config/feishu/test-connection');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to test feishu connection';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const syncFeishuFields = useCallback(async (): Promise<{
+    success: boolean;
+    message: string;
+    result?: {
+      existing: string[];
+      created: Array<{ name: string; id: string }>;
+      failed: Array<{ name: string; error: string }>;
+    };
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await post('/config/feishu/sync-fields');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to sync feishu fields';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const toggleFeishu = useCallback(async (): Promise<{
+    success: boolean;
+    message: string;
+    feishu_enabled: boolean;
+  }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await post('/config/feishu/toggle');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to toggle feishu';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -227,5 +289,8 @@ export function useConfig() {
     saveLoginInfo,
     clearLoginInfo,
     getStats,
+    testFeishuConnection,
+    syncFeishuFields,
+    toggleFeishu,
   };
 }
