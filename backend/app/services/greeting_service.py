@@ -5,11 +5,18 @@
 import asyncio
 import logging
 import random
+import os
+import json
 from typing import Optional, Dict, List
 from datetime import datetime
 from collections import deque
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# 日志目录
+LOGS_DIR = Path(__file__).parent.parent.parent / "logs" / "greeting"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def random_delay(min_seconds: float = 1.0, max_seconds: float = 3.0) -> float:
@@ -38,7 +45,7 @@ class GreetingTaskManager:
         self.skipped_count: int = 0
         self.start_time: Optional[datetime] = None
         self.end_time: Optional[datetime] = None
-        self.logs: deque = deque(maxlen=100)  # 最多保存100条日志
+        self.logs: deque = deque(maxlen=500)  # 增加到500条日志
         self.error_message: Optional[str] = None
         self.limit_reached: bool = False  # 是否触发打招呼限制
 
@@ -48,8 +55,11 @@ class GreetingTaskManager:
         # 期望职位列表（用于职位匹配筛选）
         self.expected_positions: List[str] = []
 
+        # 日志文件路径（每次任务创建新文件）
+        self.log_file_path: Optional[Path] = None
+
     def add_log(self, level: str, message: str):
-        """添加日志"""
+        """添加日志（同时保存到内存和文件）"""
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "level": level,
@@ -64,6 +74,14 @@ class GreetingTaskManager:
             logger.warning(message)
         elif level == "ERROR":
             logger.error(message)
+
+        # 写入日志文件（持久化）
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            except Exception as e:
+                logger.error(f"写入日志文件失败: {e}")
 
     def get_status(self) -> Dict:
         """获取当前状态"""
@@ -91,7 +109,7 @@ class GreetingTaskManager:
         return list(self.logs)[-last_n:]
 
     def reset(self):
-        """重置状态"""
+        """重置状态（日志文件保留，不删除）"""
         self.status = "idle"
         self.target_count = 0
         self.current_index = 0
@@ -103,6 +121,9 @@ class GreetingTaskManager:
         self.logs.clear()
         self.error_message = None
         self.expected_positions = []
+        self.limit_reached = False
+        # 日志文件路径清除（文件本身保留）
+        self.log_file_path = None
         if self.automation:
             self.automation = None
 
@@ -122,6 +143,11 @@ class GreetingTaskManager:
         self.status = "running"
         self.target_count = target_count
         self.start_time = datetime.now()
+
+        # 创建日志文件（按时间戳命名）
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file_path = LOGS_DIR / f"greeting_{timestamp}.log"
+        logger.info(f"📝 日志文件: {self.log_file_path}")
 
         # 保存期望职位列表
         if expected_positions:
@@ -419,6 +445,9 @@ class GreetingTaskManager:
             # 发送钉钉通知
             await self._send_notification(total_processed, elapsed)
 
+            # 保存任务摘要到日志文件
+            self._save_task_summary(total_processed, elapsed)
+
         except Exception as e:
             self.status = "error"
             self.error_message = str(e)
@@ -434,29 +463,9 @@ class GreetingTaskManager:
                 self.end_time = datetime.now()
                 logger.warning("⚠️ 任务在finally块中被清理，可能发生了未捕获的异常")
 
-            # 任务结束后自动重置计数器，为下次运行准备干净的状态
-            # 延迟3秒后重置，让用户有时间查看最终统计
-            async def delayed_reset():
-                await asyncio.sleep(3.0)
-                logger.info("🔄 自动重置计数器，准备下次任务...")
-                # 只重置计数器和状态，保留最后一条日志用于显示
-                self.status = "idle"
-                self.target_count = 0
-                self.current_index = 0
-                self.success_count = 0
-                self.failed_count = 0
-                self.skipped_count = 0
-                self.start_time = None
-                self.end_time = None
-                self.error_message = None
-                self.expected_positions = []
-                self.limit_reached = False
-                # 清空日志，为下次任务准备
-                self.logs.clear()
-                self.add_log("INFO", "✨ 系统已准备好，可以开始新任务")
-
-            # 启动延迟重置任务（不等待完成）
-            asyncio.create_task(delayed_reset())
+            # 不再自动重置，保留任务状态和日志供用户查看
+            # 用户需要手动点击"重置"按钮来清理状态
+            self.add_log("INFO", "💡 任务已结束，请手动点击「重置」按钮开始新任务")
 
             # 不要关闭浏览器，因为是复用的全局实例
 
@@ -651,6 +660,32 @@ class GreetingTaskManager:
         except Exception as e:
             logger.error(f"检测限制弹窗时出错: {e}")
             return False
+
+    def _save_task_summary(self, total_processed: int, elapsed_time: float):
+        """保存任务摘要到日志文件"""
+        if not self.log_file_path:
+            return
+
+        try:
+            summary = {
+                "type": "SUMMARY",
+                "timestamp": datetime.now().isoformat(),
+                "status": self.status,
+                "target_count": self.target_count,
+                "success_count": self.success_count,
+                "failed_count": self.failed_count,
+                "skipped_count": self.skipped_count,
+                "total_processed": total_processed,
+                "elapsed_time": elapsed_time,
+                "limit_reached": self.limit_reached,
+                "expected_positions": self.expected_positions,
+            }
+            with open(self.log_file_path, "a", encoding="utf-8") as f:
+                f.write("\n" + "=" * 50 + "\n")
+                f.write(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
+            logger.info(f"📝 任务摘要已保存到: {self.log_file_path}")
+        except Exception as e:
+            logger.error(f"保存任务摘要失败: {e}")
 
     async def _send_notification(self, total_processed: int, elapsed_time: float):
         """
