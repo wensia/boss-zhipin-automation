@@ -224,7 +224,28 @@ class GreetingTaskManager:
                         no_new_candidate_count += 1
                         if no_new_candidate_count >= 3:
                             self.add_log("WARNING", "⚠️ 连续3次滚动未找到新候选人，可能已到达列表末尾")
-                            break
+                            self.add_log("INFO", "🔄 刷新页面后继续执行任务...")
+
+                            # 刷新页面
+                            await self.automation.page.reload()
+                            await asyncio.sleep(3)  # 等待页面加载
+
+                            # 重新获取 recommendFrame
+                            recommend_frame = None
+                            for frame in self.automation.page.frames:
+                                if frame.name == 'recommendFrame':
+                                    recommend_frame = frame
+                                    break
+
+                            if not recommend_frame:
+                                self.add_log("ERROR", "❌ 刷新后未找到recommendFrame，停止任务")
+                                break
+
+                            self.add_log("INFO", "✅ 页面刷新成功，继续执行任务")
+                            no_new_candidate_count = 0  # 重置计数
+                            await asyncio.sleep(2)  # 额外等待确保页面稳定
+                            continue
+
                         self.add_log("INFO", "📜 滚动加载更多候选人...")
                         await recommend_frame.evaluate("""
                             window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
