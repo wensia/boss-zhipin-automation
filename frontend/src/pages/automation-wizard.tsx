@@ -489,8 +489,8 @@ export default function AutomationWizard() {
     try {
       // 验证输入
       const targetCount = maxContacts === '' ? 10 : maxContacts;
-      if (targetCount < 1 || targetCount > 300) {
-        toast.error('打招呼数量必须在 1-300 之间');
+      if (targetCount < 1 || targetCount > 500) {
+        toast.error('打招呼数量必须在 1-500 之间');
         return;
       }
 
@@ -1088,7 +1088,7 @@ export default function AutomationWizard() {
                   id="maxContacts"
                   type="number"
                   min="1"
-                  max="300"
+                  max="500"
                   value={maxContacts}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -1110,7 +1110,7 @@ export default function AutomationWizard() {
                   className="max-w-xs"
                 />
                 <p className="text-sm text-muted-foreground">
-                  最多可设置 300 人，建议分批次进行，避免触发平台限制
+                  最多可设置 500 人，建议分批次进行，避免触发平台限制
                 </p>
               </div>
 

@@ -37,7 +37,7 @@ class AutomationTemplateBase(SQLModel):
     greeting_count: int = Field(
         default=50,
         ge=1,
-        le=300,
+        le=500,
         description="打招呼数量"
     )
     expected_positions: Optional[list] = Field(

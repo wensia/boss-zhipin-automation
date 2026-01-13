@@ -120,8 +120,8 @@ export default function AutoGreetingPage() {
   const handleStart = async () => {
     // 验证输入
     const count = targetCount === '' ? 10 : targetCount;
-    if (count < 1 || count > 300) {
-      alert('请输入1-300之间的数量');
+    if (count < 1 || count > 500) {
+      alert('请输入1-500之间的数量');
       return;
     }
 
@@ -315,7 +315,7 @@ export default function AutoGreetingPage() {
                   id="target-count"
                   type="number"
                   min="1"
-                  max="300"
+                  max="500"
                   value={targetCount}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -338,7 +338,7 @@ export default function AutoGreetingPage() {
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  最多可设置 300 人，建议分批次进行，避免触发平台限制
+                  最多可设置 500 人，建议分批次进行，避免触发平台限制
                 </p>
               </div>
 

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/greeting", tags=["greeting"])
 
 class StartGreetingRequest(BaseModel):
     """开始打招呼请求"""
-    target_count: int = Field(..., ge=1, le=300, description="打招呼数量（1-300）")
+    target_count: int = Field(..., ge=1, le=500, description="打招呼数量（1-500）")
     expected_positions: List[str] = Field(default=[], description="期望职位关键词列表（包含匹配）")
 
 
@@ -52,7 +52,7 @@ async def start_greeting(request: StartGreetingRequest):
     """
     启动自动打招呼任务
 
-    - **target_count**: 打招呼数量（1-300）
+    - **target_count**: 打招呼数量（1-500）
     """
     import logging
     logger = logging.getLogger(__name__)
