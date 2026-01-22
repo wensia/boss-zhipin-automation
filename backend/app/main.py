@@ -32,12 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 挂载前端静态文件(构建后)
-# frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
-# if frontend_dist.exists():
-#     app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")
-
-
 @app.get("/api/health")
 async def health_check():
     """健康检查接口"""
@@ -56,6 +50,11 @@ app.include_router(logs.router)
 app.include_router(greeting.router)
 app.include_router(accounts.router)
 app.include_router(notification.router)
+
+# 挂载前端静态文件(必须在所有API路由之后)
+frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")
 
 
 if __name__ == "__main__":

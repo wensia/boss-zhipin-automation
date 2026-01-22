@@ -1,0 +1,42 @@
+Boss直聘自动化工具 - 使用说明
+================================
+
+【使用方法】
+
+1. 打开终端 (Terminal)
+
+2. 进入项目文件夹:
+   cd /path/to/Boss直聘自动化
+
+3. 首次运行设置权限:
+   chmod +x start.sh
+
+4. 启动应用:
+   ./start.sh
+
+5. 浏览器访问: http://localhost:27421
+
+6. 按 Ctrl+C 停止服务
+
+
+【首次启动说明】
+首次运行会自动安装:
+- uv (Python包管理器)
+- Python依赖
+- Playwright浏览器
+请保持网络连接，等待安装完成
+
+
+【常见问题】
+
+Q: 端口被占用
+A: 运行以下命令查看并结束占用进程:
+   lsof -i :27421
+   kill -9 <PID>
+
+Q: Playwright 浏览器下载失败
+A: 检查网络，手动运行:
+   cd backend && uv run playwright install chromium
+
+Q: 页面打不开
+A: 确认终端显示"访问地址"后再打开浏览器

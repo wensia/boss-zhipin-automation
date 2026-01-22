@@ -485,6 +485,10 @@ async def initialize_browser(
     Returns:
         初始化结果
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"🔧 初始化浏览器 - headless={headless} (类型: {type(headless).__name__}), com_id={com_id}")
+
     global _automation_service, _headless
 
     # 如果已经初始化，先清理
@@ -494,6 +498,7 @@ async def initialize_browser(
 
     # 设置 headless 模式
     _headless = headless
+    logger.info(f"🔧 设置全局 _headless={_headless}")
 
     # 创建自动化服务实例，如果指定了com_id则使用该账号
     _automation_service = BossAutomation(com_id=com_id)

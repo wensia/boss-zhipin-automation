@@ -43,12 +43,13 @@ class BossAutomation:
             是否初始化成功
         """
         try:
-            logger.info("🚀 初始化 Playwright 浏览器...")
+            logger.info(f"🚀 初始化 Playwright 浏览器... headless={headless}")
 
             # 启动 Playwright
             self.playwright = await async_playwright().start()
 
             # 启动浏览器
+            logger.info(f"🖥️ 启动 Chromium 浏览器，headless={headless}，显示窗口={'否' if headless else '是'}")
             self.browser = await self.playwright.chromium.launch(
                 headless=headless,
                 args=[
