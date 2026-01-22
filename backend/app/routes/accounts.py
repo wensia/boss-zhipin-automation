@@ -17,7 +17,7 @@ from app.services.boss_automation import BossAutomation
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 
-@router.get("/", response_model=List[UserAccountRead])
+@router.get("", response_model=List[UserAccountRead])
 async def list_accounts(
     skip: int = 0,
     limit: int = 100,
@@ -77,7 +77,7 @@ async def get_account(
     return account
 
 
-@router.post("/", response_model=UserAccountRead)
+@router.post("", response_model=UserAccountRead)
 async def create_account(
     account_data: UserAccountCreate,
     session: Session = Depends(get_session)
