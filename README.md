@@ -4,79 +4,151 @@
 
 ## 功能特性
 
-- ✅ 二维码登录（自动刷新、已登录检测）
-- ✅ 自动化任务管理
-- ✅ 候选人管理
-- ✅ 消息模板管理
-- ✅ 运行日志记录
-- ✅ 系统配置
+- 二维码登录（自动刷新、已登录检测）
+- 多账号管理（支持切换不同招聘账号）
+- 职位筛选（年龄、学历、经验等条件过滤）
+- 自动打招呼（批量发送招呼消息）
+- 消息模板管理
+- 运行日志记录
+- 系统配置
 
-## 技术栈
+## 系统要求
 
-### 后端
-- Python 3.12
-- FastAPI
-- SQLModel + SQLite
-- Playwright（浏览器自动化）
-- uv（包管理器）
+### macOS
+- macOS 10.15 或更高版本
+- 终端 (Terminal)
+- 网络连接（首次安装需要下载依赖）
 
-### 前端
-- React 19
-- TypeScript
-- Vite 7
-- Tailwind CSS 4
-- shadcn/ui
-- React Router v6
+### Windows
+- Windows 10 或更高版本
+- PowerShell（Windows 自带）
+- 网络连接（首次安装需要下载依赖）
+
+> **注意**: 首次运行会自动安装所需的 Python 环境和浏览器组件，请保持网络连接。
 
 ## 快速开始
 
-### 方式 1: Mac 桌面版（推荐给普通用户）
-
-**适用于：** 想直接使用的 Mac 用户，无需安装开发环境
-
-查看 [electron-app/快速测试指南.md](electron-app/快速测试指南.md) 了解详情
+### macOS 用户
 
 ```bash
-# 开发模式测试（需要先启动后端和前端）
-cd electron-app
-./start-dev.sh
+# 1. 解压文件后，打开终端进入项目目录
+cd Boss直聘自动化
 
-# 构建分发版本（生成 .dmg 安装包）
-cd electron-app
-npm run build
+# 2. 首次运行，设置执行权限
+chmod +x install.sh start.sh stop.sh
+
+# 3. 首次安装（只需运行一次）
+./install.sh
+
+# 4. 启动应用
+./start.sh
+
+# 5. 停止应用
+./stop.sh
 ```
 
-### 方式 2: Web 开发模式
+### Windows 用户
 
-**适用于：** 开发者，需要修改代码
+```powershell
+# 1. 解压文件后，在文件夹中右键选择"在终端中打开"
 
-#### 1. 安装依赖
+# 2. 首次安装（只需运行一次）
+.\install.bat
+
+# 3. 启动应用
+.\start.bat
+
+# 4. 停止应用
+.\stop.bat
+```
+
+### 访问应用
+
+启动后自动打开浏览器访问: **http://localhost:27421**
+
+如果浏览器没有自动打开，请手动复制上面的地址到浏览器打开。
+
+## 使用流程
+
+### 1. 初始化浏览器
+- 进入"自动化向导"页面
+- 可选择是否显示浏览器窗口（建议首次使用时显示，便于观察）
+- 点击"开始初始化"
+
+### 2. 登录账号
+- **已有账号**: 选择之前登录过的账号直接使用
+- **新账号**: 使用 Boss 直聘 APP 扫描二维码登录
+
+### 3. 选择职位
+- 从已发布的职位列表中选择要招聘的职位
+
+### 4. 配置筛选条件
+- 设置候选人筛选条件（年龄、学历、工作经验等）
+- 设置打招呼消息模板
+
+### 5. 启动任务
+- 确认配置后开始自动化任务
+- 可在"任务列表"页面查看进度
+
+## 常见问题
+
+### Q: 端口被占用怎么办？
+
+**macOS:**
+```bash
+# 查看占用端口的进程
+lsof -i :27421
+
+# 结束进程
+kill -9 <PID>
+
+# 或者直接运行停止脚本
+./stop.sh
+```
+
+**Windows:**
+```powershell
+# 查看占用端口的进程
+netstat -ano | findstr :27421
+
+# 结束进程
+taskkill /F /PID <PID>
+
+# 或者直接运行停止脚本
+.\stop.bat
+```
+
+### Q: 浏览器窗口不显示？
+
+1. 确保勾选了"显示浏览器窗口"选项
+2. 使用 `Cmd+Tab` (Mac) 或 `Alt+Tab` (Windows) 切换窗口
+3. 如果问题持续，尝试重新安装 Playwright 浏览器：
 
 ```bash
-# 后端
-cd backend
-uv sync
+# macOS
+cd backend && source .venv/bin/activate && playwright install chromium
 
-# 前端
-cd frontend
-npm install
+# Windows
+cd backend && .venv\Scripts\activate && playwright install chromium
 ```
 
-#### 2. 启动服务
+### Q: 页面打不开？
 
-```bash
-# 后端（端口 27421）
-cd backend
-uv run python -m app.main
+1. 确认终端显示"访问地址: http://localhost:27421"后再打开浏览器
+2. 检查是否有防火墙阻止了本地连接
+3. 尝试使用 http://127.0.0.1:27421 访问
 
-# 前端（端口 13601）
-cd frontend
-npm run dev
-```
+### Q: 安装依赖失败？
 
-#### 3. 访问应用
+1. 检查网络连接
+2. 如果在中国大陆，可能需要配置镜像源
+3. 尝试多次运行安装脚本
 
-打开浏览器访问: http://localhost:13601
+### Q: 二维码一直刷新？
+
+1. 二维码有效期约 2 分钟，系统会自动刷新最多 5 次
+2. 请在二维码显示后尽快使用 Boss 直聘 APP 扫码
+3. 如果超过 5 次，点击"重新登录"按钮
 
 ## 项目结构
 
@@ -88,57 +160,42 @@ Boss直聘自动化/
 │   │   ├── routes/         # API 路由
 │   │   ├── services/       # 业务逻辑
 │   │   └── main.py         # 入口文件
-│   ├── pyproject.toml      # Python 依赖
-│   └── uv.lock
+│   ├── data/               # 数据存储
+│   └── pyproject.toml      # Python 依赖
 ├── frontend/               # 前端代码
 │   ├── src/
 │   │   ├── components/     # UI 组件
 │   │   ├── pages/          # 页面
-│   │   ├── hooks/          # React Hooks
-│   │   └── types/          # TypeScript 类型
-│   └── package.json
-├── electron-app/           # Mac 桌面版打包（新增）
-│   ├── main.js            # Electron 主进程
-│   ├── package.json       # Electron 配置
-│   ├── scripts/           # 构建脚本
-│   └── README.md          # 详细文档
-└── README.md
+│   │   └── hooks/          # React Hooks
+│   └── dist/               # 构建产物
+├── install.sh              # macOS 安装脚本
+├── start.sh                # macOS 启动脚本
+├── stop.sh                 # macOS 停止脚本
+├── install.bat             # Windows 安装脚本
+├── start.bat               # Windows 启动脚本
+├── stop.bat                # Windows 停止脚本
+└── 使用说明.txt             # 快速使用说明
 ```
 
-## 主要功能
+## 技术栈
 
-### 1. 登录管理
-- 扫码登录
-- 自动刷新二维码（最多5次）
-- 已登录状态检测
-- 用户信息展示
+### 后端
+- Python 3.12+
+- FastAPI
+- SQLModel + SQLite
+- Playwright（浏览器自动化）
 
-### 2. 任务管理
-- 创建自动化任务
-- 启动/暂停/取消任务
-- 任务进度跟踪
-- 任务历史记录
+### 前端
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
 
-### 3. 候选人管理
-- 候选人信息存储
-- 状态管理
-- 备注功能
+## 许可证
 
-### 4. 模板管理
-- 消息模板创建
-- 模板启用/禁用
-- 使用统计
-
-### 5. 运行日志
-- 自动记录系统操作
-- 日志级别筛选
-- 操作类型筛选
-- 分页查看
+MIT License
 
 ## 开发者
 
 潘宇航
-
-## 许可证
-
-MIT
