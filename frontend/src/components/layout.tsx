@@ -5,7 +5,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { LayoutDashboard, Zap, Settings, UserCog, Bell, ChevronDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -57,7 +56,7 @@ export function Layout({ children }: LayoutProps) {
   const [status, setStatus] = useState<GreetingStatus | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 账号管理
   const { currentAccount, allAccounts, switching, switchToAccount } = useCurrentAccount();

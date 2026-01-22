@@ -2,7 +2,7 @@
  * 运行日志页面 - 实时显示打招呼任务日志
  */
 import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,7 +32,7 @@ export default function Logs() {
   const [status, setStatus] = useState<GreetingStatus | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 轮询日志和状态
   useEffect(() => {
@@ -71,19 +71,6 @@ export default function Logs() {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs, autoScroll]);
-
-  const getLevelColor = (level: string): string => {
-    switch (level.toUpperCase()) {
-      case 'INFO':
-        return 'text-blue-600';
-      case 'WARNING':
-        return 'text-yellow-600';
-      case 'ERROR':
-        return 'text-red-600';
-      default:
-        return 'text-gray-600';
-    }
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {

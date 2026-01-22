@@ -16,20 +16,17 @@
     "productName": "Boss直聘自动化",
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "assets/icon.icns",
       "target": [
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ]
     },
     "dmg": {
-      "title": "Boss直聘自动化安装",
-      "icon": "assets/icon.icns"
+      "title": "Boss直聘自动化安装"
     },
     "files": [
       "main.js",

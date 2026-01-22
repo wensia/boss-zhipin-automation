@@ -16,6 +16,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "black>=25.9.0",
+    "pyinstaller>=6.18.0",
     "pytest>=8.4.2",
     "ruff>=0.14.2",
 ]

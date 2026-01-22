@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Building2, Mail, Calendar, CheckCircle2, Star, TrendingUp, TrendingDown, RefreshCw, Chrome } from 'lucide-react';
+import { User, Building2, Mail, Calendar, CheckCircle2, Star, RefreshCw, Chrome } from 'lucide-react';
 import axios from 'axios';
 
 interface RecruitData {

@@ -20,30 +20,29 @@ export function FilterConfig({ filters, onChange }: FilterConfigProps) {
   // 更新年龄范围
   const updateAge = (field: 'min' | 'max', value: string) => {
     const numValue = value === '' ? undefined : parseInt(value);
+    const currentMin = filters.age?.min ?? 22;
+    const currentMax = filters.age?.max;
 
-    // 构建新的年龄对象
-    const newAge = {
-      ...filters.age,
-      [field]: numValue,
-    };
+    let newMin = field === 'min' ? numValue : currentMin;
+    let newMax = field === 'max' ? numValue : currentMax;
 
     // 验证：最小年龄不能大于最大年龄
-    if (newAge.min !== undefined && newAge.max !== undefined) {
-      if (newAge.min > newAge.max) {
-        // 如果修改的是最小年龄，并且超过了最大年龄，则将最大年龄调整为最小年龄
+    if (newMin !== undefined && newMax !== undefined) {
+      if (newMin > newMax) {
         if (field === 'min') {
-          newAge.max = newAge.min;
-        }
-        // 如果修改的是最大年龄，并且小于了最小年龄，则将最小年龄调整为最大年龄
-        else if (field === 'max') {
-          newAge.min = newAge.max;
+          newMax = newMin;
+        } else if (field === 'max') {
+          newMin = newMax;
         }
       }
     }
 
+    // 确保 min 有默认值
+    const finalMin = newMin ?? 22;
+
     onChange({
       ...filters,
-      age: newAge,
+      age: { min: finalMin, max: newMax },
     });
   };
 

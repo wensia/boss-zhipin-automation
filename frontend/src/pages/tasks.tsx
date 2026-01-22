@@ -230,7 +230,7 @@ export function Tasks() {
               <div className="grid gap-2">
                 <Label htmlFor="template">问候模板</Label>
                 <Select
-                  value={newTask.greeting_template_id.toString()}
+                  value={(newTask.greeting_template_id ?? 0).toString()}
                   onValueChange={(value: string) =>
                     setNewTask({
                       ...newTask,

@@ -2,7 +2,7 @@
  * 自动化向导页面 - 一站式配置和启动自动化任务
  */
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import { Zap, Monitor, CheckCircle2, Settings2, PlayCircle, Loader2, Briefcase, X, Save, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,7 +42,6 @@ import { Textarea } from '@/components/ui/textarea';
 type WizardStep = 'browser' | 'login' | 'job-select' | 'configure' | 'confirm';
 
 export default function AutomationWizard() {
-  const navigate = useNavigate();
   const { initBrowser, getQRCode, checkLogin, getAvailableJobs, selectJob, applyFilters, refreshQrcode } = useAutomation();
   const { getJobs } = useJobs();
   const { createTemplate } = useAutomationTemplates();
@@ -88,13 +87,13 @@ export default function AutomationWizard() {
 
   // 数据加载
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   // 打招呼任务状态
   const [greetingStarted, setGreetingStarted] = useState(false);
   const [greetingStatus, setGreetingStatus] = useState<GreetingStatus | null>(null);
   const [greetingLogs, setGreetingLogs] = useState<GreetingLogEntry[]>([]);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 期望职位匹配相关状态
   const [expectedPositions, setExpectedPositions] = useState<string[]>([]);
@@ -1462,9 +1461,7 @@ export default function AutomationWizard() {
             className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
               currentStep === 'browser'
                 ? 'bg-primary text-primary-foreground border-primary'
-                : currentStep !== 'browser'
-                ? 'bg-blue-50 text-blue-700 border-blue-700'
-                : 'border-muted-foreground text-muted-foreground'
+                : 'bg-blue-50 text-blue-700 border-blue-700'
             }`}
           >
             {currentStep !== 'browser' ? <CheckCircle2 className="h-5 w-5" /> : '1'}

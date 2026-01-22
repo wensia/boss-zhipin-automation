@@ -69,23 +69,23 @@ try {
       const chromiumSrc = path.join(playwrightCachePath, chromiumDir);
       const chromiumDest = path.join(playwrightDestPath, chromiumDir);
 
-      // 递归复制目录
-      function copyDirRecursive(src, dest) {
-        fs.mkdirSync(dest, { recursive: true });
-        const entries = fs.readdirSync(src, { withFileTypes: true });
-        for (const entry of entries) {
-          const srcPath = path.join(src, entry.name);
-          const destPath = path.join(dest, entry.name);
-          if (entry.isDirectory()) {
-            copyDirRecursive(srcPath, destPath);
-          } else {
-            fs.copyFileSync(srcPath, destPath);
-          }
+      // 确保目标目录存在
+      fs.mkdirSync(playwrightDestPath, { recursive: true });
+
+      // 使用系统 cp 命令复制（处理符号链接和特殊文件）
+      try {
+        execSync(`cp -R "${chromiumSrc}" "${playwrightDestPath}/"`, { stdio: 'inherit' });
+        console.log(`已复制 Playwright Chromium: ${chromiumDir}`);
+      } catch (copyError) {
+        console.warn('警告: 复制 Playwright 浏览器时出错，尝试使用 ditto...');
+        // 尝试使用 ditto（macOS 更可靠的复制工具）
+        try {
+          execSync(`ditto "${chromiumSrc}" "${chromiumDest}"`, { stdio: 'inherit' });
+          console.log(`已使用 ditto 复制 Playwright Chromium: ${chromiumDir}`);
+        } catch (dittoError) {
+          console.warn('警告: 无法复制 Playwright 浏览器，应用将在首次启动时下载');
         }
       }
-
-      copyDirRecursive(chromiumSrc, chromiumDest);
-      console.log(`已复制 Playwright Chromium: ${chromiumDir}`);
     } else {
       console.warn('警告: 未找到 Playwright Chromium，请先运行: uv run playwright install chromium');
     }
