@@ -107,15 +107,20 @@ export default function AutomationWizard() {
    */
   const handleInitBrowser = async () => {
     setBrowserInitializing(true);
+    let loadedAccounts: typeof availableAccounts = [];
+    let currentSelectedAccountId: number | null = null;
+
     try {
       // 先加载账号列表
       try {
         const accounts = await getAccounts();
+        loadedAccounts = accounts;
         setAvailableAccounts(accounts);
 
         // 尝试获取当前账号
         const currentAccount = await getCurrentAccount();
         if (currentAccount) {
+          currentSelectedAccountId = currentAccount.id;
           setSelectedAccountId(currentAccount.id);
         }
       } catch (error) {
@@ -131,8 +136,27 @@ export default function AutomationWizard() {
         // 进入登录步骤，让用户选择账号或扫码登录
         setCurrentStep('login');
 
-        // 如果已经有选中的账号，尝试使用该账号登录
-        if (selectedAccountId) {
+        // 如果没有已保存的账号，自动获取二维码
+        if (loadedAccounts.length === 0) {
+          // 没有账号，自动获取二维码
+          setCheckingLogin(true);
+          try {
+            const qrResult = await getQRCode();
+            if (qrResult.qrcode) {
+              setQrCode(qrResult.qrcode);
+              // 开始轮询登录状态
+              startLoginPolling();
+            } else {
+              toast.error('获取二维码失败');
+            }
+          } catch (error) {
+            console.error('获取二维码失败:', error);
+            toast.error('获取二维码失败');
+          } finally {
+            setCheckingLogin(false);
+          }
+        } else if (currentSelectedAccountId) {
+          // 如果已经有选中的账号，尝试使用该账号登录
           setCheckingLogin(true);
           toast.info('正在检查登录状态...');
 
