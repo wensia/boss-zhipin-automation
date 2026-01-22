@@ -61,9 +61,18 @@ app.include_router(notification.router)
 if __name__ == "__main__":
     import uvicorn
     import os
+    import sys
 
     # 从环境变量读取端口配置，默认使用27421
-    port = int(os.getenv("API_PORT", 27421))
+    port = int(os.getenv("API_PORT", os.getenv("PORT", 27421)))
     host = os.getenv("API_HOST", "0.0.0.0")
 
-    uvicorn.run("app.main:app", host=host, port=port, reload=True)
+    # 检测是否在 PyInstaller 打包环境中运行
+    is_frozen = getattr(sys, 'frozen', False)
+
+    if is_frozen:
+        # 打包环境：直接传递 app 对象，不使用 reload
+        uvicorn.run(app, host=host, port=port, reload=False)
+    else:
+        # 开发环境：使用模块字符串支持热重载
+        uvicorn.run("app.main:app", host=host, port=port, reload=True)

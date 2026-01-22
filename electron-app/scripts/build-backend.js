@@ -38,6 +38,8 @@ try {
       --collect-all=playwright \
       --collect-all=fastapi \
       --collect-all=sqlmodel \
+      --collect-all=aiosqlite \
+      --hidden-import=aiosqlite \
       app/main.py
   `.replace(/\n\s+/g, ' ');
 
