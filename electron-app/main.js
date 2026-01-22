@@ -208,7 +208,7 @@ function installPlaywright() {
       try {
         updateSplashStatus('正在复制浏览器组件...');
 
-        const bundledBrowsersPath = path.join(process.resourcesPath, 'backend-dist', 'playwright-browsers');
+        const bundledBrowsersPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend-dist', 'playwright-browsers');
 
         if (!fs.existsSync(bundledBrowsersPath)) {
           reject(new Error('应用包中未包含浏览器组件，请重新下载安装包'));
@@ -361,7 +361,7 @@ function startBackend() {
     } else {
       // 生产模式：使用打包后的可执行文件
       console.log('启动生产模式后端...');
-      const backendPath = path.join(process.resourcesPath, 'backend-dist', 'backend');
+      const backendPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend-dist', 'backend');
       backendProcess = spawn(backendPath, [], {
         env: { ...process.env, PORT: BACKEND_PORT.toString() },
         detached: process.platform !== 'win32' // 在 Unix 系统上创建新的进程组
