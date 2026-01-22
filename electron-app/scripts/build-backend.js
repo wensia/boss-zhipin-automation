@@ -54,6 +54,45 @@ try {
     }
   });
 
+  // 复制 Playwright 浏览器（用于离线安装）
+  console.log('正在复制 Playwright 浏览器...');
+  const homeDir = require('os').homedir();
+  const playwrightCachePath = path.join(homeDir, 'Library', 'Caches', 'ms-playwright');
+  const playwrightDestPath = path.join(outputDir, 'playwright-browsers');
+
+  if (fs.existsSync(playwrightCachePath)) {
+    // 查找 chromium 目录
+    const dirs = fs.readdirSync(playwrightCachePath);
+    const chromiumDir = dirs.find(d => d.startsWith('chromium'));
+
+    if (chromiumDir) {
+      const chromiumSrc = path.join(playwrightCachePath, chromiumDir);
+      const chromiumDest = path.join(playwrightDestPath, chromiumDir);
+
+      // 递归复制目录
+      function copyDirRecursive(src, dest) {
+        fs.mkdirSync(dest, { recursive: true });
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+          const srcPath = path.join(src, entry.name);
+          const destPath = path.join(dest, entry.name);
+          if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, destPath);
+          } else {
+            fs.copyFileSync(srcPath, destPath);
+          }
+        }
+      }
+
+      copyDirRecursive(chromiumSrc, chromiumDest);
+      console.log(`已复制 Playwright Chromium: ${chromiumDir}`);
+    } else {
+      console.warn('警告: 未找到 Playwright Chromium，请先运行: uv run playwright install chromium');
+    }
+  } else {
+    console.warn('警告: 未找到 Playwright 缓存目录，请先运行: uv run playwright install chromium');
+  }
+
   console.log('后端构建完成！');
 } catch (error) {
   console.error('后端构建失败:', error);

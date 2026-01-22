@@ -1,15 +1,260 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 
 let mainWindow;
+let splashWindow;
 let backendProcess;
 let isQuitting = false;
 
 // 后端服务配置
 const BACKEND_PORT = 27421;
 const FRONTEND_PORT = 13601;
+
+// Playwright 浏览器缓存路径
+const PLAYWRIGHT_CACHE_PATH = path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright');
+
+/**
+ * 创建启动画面窗口
+ */
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: 200,
+    frame: false,
+    transparent: false,
+    alwaysOnTop: true,
+    resizable: false,
+    center: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  const splashHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          padding: 20px;
+        }
+        .title { font-size: 24px; font-weight: 600; margin-bottom: 20px; }
+        .status { font-size: 14px; opacity: 0.9; text-align: center; margin-bottom: 15px; }
+        .progress-container {
+          width: 100%;
+          max-width: 300px;
+          height: 6px;
+          background: rgba(255,255,255,0.3);
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        .progress-bar {
+          height: 100%;
+          background: white;
+          border-radius: 3px;
+          animation: loading 1.5s ease-in-out infinite;
+          width: 30%;
+        }
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(400%); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="title">Boss直聘自动化</div>
+      <div class="status" id="status">正在启动...</div>
+      <div class="progress-container">
+        <div class="progress-bar"></div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHTML)}`);
+}
+
+/**
+ * 更新启动画面状态
+ */
+function updateSplashStatus(message) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.executeJavaScript(
+      `document.getElementById('status').textContent = '${message}';`
+    );
+  }
+  console.log(`状态: ${message}`);
+}
+
+/**
+ * 关闭启动画面
+ */
+function closeSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+    splashWindow = null;
+  }
+}
+
+/**
+ * 检查 Playwright Chromium 是否已安装
+ */
+function isPlaywrightInstalled() {
+  try {
+    if (!fs.existsSync(PLAYWRIGHT_CACHE_PATH)) {
+      return false;
+    }
+
+    const dirs = fs.readdirSync(PLAYWRIGHT_CACHE_PATH);
+    // 查找 chromium 目录
+    const chromiumDir = dirs.find(d => d.startsWith('chromium'));
+    if (!chromiumDir) {
+      return false;
+    }
+
+    const chromiumPath = path.join(PLAYWRIGHT_CACHE_PATH, chromiumDir);
+    const contents = fs.readdirSync(chromiumPath);
+    // 检查是否有实际的浏览器文件
+    return contents.length > 0;
+  } catch (error) {
+    console.error('检查 Playwright 安装状态失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 递归复制目录
+ */
+function copyDirRecursive(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+      // 保持可执行权限
+      try {
+        const stats = fs.statSync(srcPath);
+        fs.chmodSync(destPath, stats.mode);
+      } catch (e) {
+        // 忽略权限错误
+      }
+    }
+  }
+}
+
+/**
+ * 安装 Playwright Chromium 浏览器
+ */
+function installPlaywright() {
+  return new Promise((resolve, reject) => {
+    updateSplashStatus('正在安装浏览器组件（首次启动需要）...');
+
+    const isDev = !app.isPackaged;
+
+    if (isDev) {
+      // 开发模式：使用项目中的 playwright
+      const backendPath = path.join(__dirname, '..', 'backend');
+      const installProcess = spawn('uv', ['run', 'playwright', 'install', 'chromium'], {
+        cwd: backendPath,
+        env: { ...process.env }
+      });
+
+      installProcess.stdout.on('data', (data) => {
+        console.log(`Playwright 安装: ${data}`);
+        const output = data.toString();
+        if (output.includes('Downloading')) {
+          updateSplashStatus('正在下载浏览器组件...');
+        } else if (output.includes('Installing')) {
+          updateSplashStatus('正在安装浏览器组件...');
+        }
+      });
+
+      installProcess.stderr.on('data', (data) => {
+        console.error(`Playwright 安装错误: ${data}`);
+      });
+
+      installProcess.on('close', (code) => {
+        if (code === 0) {
+          console.log('Playwright Chromium 安装成功');
+          resolve();
+        } else {
+          reject(new Error(`Playwright 安装失败，退出码: ${code}`));
+        }
+      });
+
+      installProcess.on('error', (error) => {
+        reject(error);
+      });
+    } else {
+      // 生产模式：从应用资源目录复制浏览器
+      try {
+        updateSplashStatus('正在复制浏览器组件...');
+
+        const bundledBrowsersPath = path.join(process.resourcesPath, 'backend-dist', 'playwright-browsers');
+
+        if (!fs.existsSync(bundledBrowsersPath)) {
+          reject(new Error('应用包中未包含浏览器组件，请重新下载安装包'));
+          return;
+        }
+
+        // 查找 chromium 目录
+        const dirs = fs.readdirSync(bundledBrowsersPath);
+        const chromiumDir = dirs.find(d => d.startsWith('chromium'));
+
+        if (!chromiumDir) {
+          reject(new Error('应用包中未包含 Chromium 浏览器'));
+          return;
+        }
+
+        const srcChromium = path.join(bundledBrowsersPath, chromiumDir);
+        const destChromium = path.join(PLAYWRIGHT_CACHE_PATH, chromiumDir);
+
+        // 确保目标目录存在
+        fs.mkdirSync(PLAYWRIGHT_CACHE_PATH, { recursive: true });
+
+        console.log(`正在复制浏览器: ${srcChromium} -> ${destChromium}`);
+        copyDirRecursive(srcChromium, destChromium);
+
+        console.log('Playwright Chromium 复制成功');
+        resolve();
+      } catch (error) {
+        console.error('复制浏览器失败:', error);
+        reject(error);
+      }
+    }
+  });
+}
+
+/**
+ * 确保 Playwright 浏览器已安装
+ */
+async function ensurePlaywrightInstalled() {
+  if (isPlaywrightInstalled()) {
+    console.log('Playwright Chromium 已安装');
+    return;
+  }
+
+  console.log('Playwright Chromium 未安装，开始安装...');
+  await installPlaywright();
+}
 
 /**
  * 强制终止进程及其所有子进程
@@ -223,16 +468,30 @@ function createWindow() {
  */
 app.whenReady().then(async () => {
   try {
+    // 显示启动画面
+    createSplashWindow();
+    updateSplashStatus('正在初始化...');
+
+    // 检查并安装 Playwright 浏览器（如果需要）
+    updateSplashStatus('正在检查浏览器组件...');
+    await ensurePlaywrightInstalled();
+
     // 启动后端服务
+    updateSplashStatus('正在启动后端服务...');
     await startBackend();
 
-    // 创建窗口
+    // 创建主窗口
+    updateSplashStatus('正在加载界面...');
     createWindow();
+
+    // 关闭启动画面
+    closeSplashWindow();
   } catch (error) {
     console.error('应用启动失败:', error);
+    closeSplashWindow();
     dialog.showErrorBox(
       '启动失败',
-      '后端服务启动失败，请检查日志。\n错误: ' + error.message
+      '应用启动失败，请检查网络连接后重试。\n\n错误详情: ' + error.message
     );
     app.quit();
   }
