@@ -57,36 +57,18 @@ class BossAutomation:
                     '--no-sandbox',
                     '--disable-dev-shm-usage',
                     '--disable-infobars',
-                    '--disable-extensions',
-                    '--disable-gpu',
-                    '--disable-setuid-sandbox',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--ignore-certificate-errors',
-                    '--window-size=1920,1080',
-                    '--start-maximized',
+                    '--start-maximized',  # 启动时最大化
                     '--no-first-run',
                     '--no-default-browser-check',
-                    '--disable-background-networking',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--disable-component-update',
-                    '--disable-client-side-phishing-detection',
-                    '--disable-sync',
-                    '--metrics-recording-only',
-                    '--disable-hang-monitor',
                     '--disable-popup-blocking',
-                    '--disable-prompt-on-repost',
-                    '--disable-domain-reliability',
                     '--disable-features=TranslateUI',
-                    '--mute-audio',
                 ]
             )
 
             # 创建浏览器上下文
+            # 不设置固定 viewport，让浏览器窗口自适应
             context_options = {
-                'viewport': {'width': 1920, 'height': 1080},
+                'viewport': None,  # 不限制 viewport，跟随窗口大小
                 'user_agent': AntiDetection.get_random_user_agent(),
                 'locale': 'zh-CN',
                 'timezone_id': 'Asia/Shanghai',
