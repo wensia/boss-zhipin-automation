@@ -107,10 +107,26 @@ cd "$BACKEND_DIR"
 if [ ! -d ".venv" ]; then
     print_info "首次运行，正在安装依赖..."
     uv sync
-    
-    print_info "正在安装 Playwright 浏览器..."
-    uv run playwright install chromium
 fi
+
+# 检查 Playwright 浏览器
+print_info "检查 Playwright 浏览器..."
+CHROMIUM_PATH=$(uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()" 2>/dev/null || echo "")
+
+if [ -z "$CHROMIUM_PATH" ] || [ ! -f "$CHROMIUM_PATH" ]; then
+    print_warning "Playwright 浏览器未安装，正在安装..."
+    uv run playwright install chromium
+    
+    # 再次检查
+    CHROMIUM_PATH=$(uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()" 2>/dev/null || echo "")
+    
+    if [ -z "$CHROMIUM_PATH" ] || [ ! -f "$CHROMIUM_PATH" ]; then
+        print_error "Playwright 浏览器安装失败"
+        print_info "请手动运行: uv run playwright install chromium"
+        exit 1
+    fi
+fi
+print_success "Playwright 浏览器已就绪"
 
 # 检查前端构建
 if [ ! -f "$SCRIPT_DIR/frontend/dist/index.html" ]; then

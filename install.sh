@@ -112,16 +112,39 @@ print_info "[3/4] 安装 Playwright 浏览器 (Chromium)..."
 print_info "这可能需要几分钟，请耐心等待..."
 
 cd "$BACKEND_DIR"
-uv run playwright install chromium
 
-# 验证安装
-CHROMIUM_PATH=$(uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()" 2>/dev/null || echo "")
+# 获取 Playwright 期望的浏览器路径
+EXPECTED_PATH=$(uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()" 2>/dev/null || echo "")
 
-if [ -n "$CHROMIUM_PATH" ] && [ -f "$CHROMIUM_PATH" ]; then
-    print_success "Playwright Chromium 安装成功"
+# 检查浏览器是否已存在
+if [ -n "$EXPECTED_PATH" ] && [ -f "$EXPECTED_PATH" ]; then
+    print_success "Playwright Chromium 已安装"
 else
-    print_warning "Playwright 浏览器可能未正确安装"
-    print_info "将在首次启动时自动重试安装"
+    print_info "正在下载 Chromium 浏览器..."
+    
+    # 安装到系统缓存目录（默认位置）
+    uv run playwright install chromium
+    
+    # 再次验证
+    CHROMIUM_PATH=$(uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()" 2>/dev/null || echo "")
+    
+    if [ -n "$CHROMIUM_PATH" ] && [ -f "$CHROMIUM_PATH" ]; then
+        print_success "Playwright Chromium 安装成功"
+    else
+        # 尝试强制安装
+        print_warning "首次安装未成功，尝试强制安装..."
+        uv run playwright install chromium --force
+        
+        # 最终验证
+        FINAL_PATH=$(uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()" 2>/dev/null || echo "")
+        
+        if [ -n "$FINAL_PATH" ] && [ -f "$FINAL_PATH" ]; then
+            print_success "Playwright Chromium 安装成功"
+        else
+            print_warning "Playwright 浏览器安装可能不完整"
+            print_info "请手动运行: cd backend && uv run playwright install chromium"
+        fi
+    fi
 fi
 
 # ============================================
