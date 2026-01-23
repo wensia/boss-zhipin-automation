@@ -56,6 +56,31 @@ class BossAutomation:
                     '--disable-blink-features=AutomationControlled',
                     '--no-sandbox',
                     '--disable-dev-shm-usage',
+                    '--disable-infobars',
+                    '--disable-extensions',
+                    '--disable-gpu',
+                    '--disable-setuid-sandbox',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--ignore-certificate-errors',
+                    '--window-size=1920,1080',
+                    '--start-maximized',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--disable-background-networking',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--disable-component-update',
+                    '--disable-client-side-phishing-detection',
+                    '--disable-sync',
+                    '--metrics-recording-only',
+                    '--disable-hang-monitor',
+                    '--disable-popup-blocking',
+                    '--disable-prompt-on-repost',
+                    '--disable-domain-reliability',
+                    '--disable-features=TranslateUI',
+                    '--mute-audio',
                 ]
             )
 
@@ -63,6 +88,17 @@ class BossAutomation:
             context_options = {
                 'viewport': {'width': 1920, 'height': 1080},
                 'user_agent': AntiDetection.get_random_user_agent(),
+                'locale': 'zh-CN',
+                'timezone_id': 'Asia/Shanghai',
+                'geolocation': {'latitude': 39.9042, 'longitude': 116.4074},  # 北京
+                'permissions': ['geolocation'],
+                'color_scheme': 'light',
+                'device_scale_factor': 1,
+                'is_mobile': False,
+                'has_touch': False,
+                'java_script_enabled': True,
+                'bypass_csp': True,
+                'ignore_https_errors': True,
             }
 
             # 如果指定了auth_file且文件存在，则加载已保存的登录状态

@@ -47,22 +47,96 @@ class AntiDetection:
         await page.add_init_script("""
             // 隐藏 webdriver 标志
             Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
+                get: () => false
             });
 
-            // 伪造 plugins
+            // 删除自动化相关属性
+            delete navigator.__proto__.webdriver;
+
+            // 伪造 plugins - 更真实的模拟
             Object.defineProperty(navigator, 'plugins', {
-                get: () => [1, 2, 3, 4, 5]
+                get: () => {
+                    const plugins = [
+                        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                        { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                    ];
+                    plugins.length = 3;
+                    return plugins;
+                }
+            });
+
+            // 伪造 mimeTypes
+            Object.defineProperty(navigator, 'mimeTypes', {
+                get: () => {
+                    const mimeTypes = [
+                        { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+                        { type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+                    ];
+                    mimeTypes.length = 2;
+                    return mimeTypes;
+                }
             });
 
             // 伪造 languages
             Object.defineProperty(navigator, 'languages', {
-                get: () => ['zh-CN', 'zh', 'en']
+                get: () => ['zh-CN', 'zh', 'en-US', 'en']
             });
 
-            // 伪造 Chrome 对象
+            // 伪造 platform
+            Object.defineProperty(navigator, 'platform', {
+                get: () => 'MacIntel'
+            });
+
+            // 伪造 hardwareConcurrency
+            Object.defineProperty(navigator, 'hardwareConcurrency', {
+                get: () => 8
+            });
+
+            // 伪造 deviceMemory
+            Object.defineProperty(navigator, 'deviceMemory', {
+                get: () => 8
+            });
+
+            // 伪造 Chrome 对象 - 更完整的模拟
             window.chrome = {
-                runtime: {}
+                runtime: {
+                    connect: function() {},
+                    sendMessage: function() {},
+                    onMessage: { addListener: function() {} },
+                    onConnect: { addListener: function() {} },
+                    id: undefined
+                },
+                loadTimes: function() {
+                    return {
+                        commitLoadTime: Date.now() / 1000 - Math.random() * 10,
+                        connectionInfo: 'h2',
+                        finishDocumentLoadTime: Date.now() / 1000 - Math.random() * 5,
+                        finishLoadTime: Date.now() / 1000 - Math.random() * 2,
+                        firstPaintAfterLoadTime: 0,
+                        firstPaintTime: Date.now() / 1000 - Math.random() * 8,
+                        navigationType: 'Other',
+                        npnNegotiatedProtocol: 'h2',
+                        requestTime: Date.now() / 1000 - Math.random() * 15,
+                        startLoadTime: Date.now() / 1000 - Math.random() * 12,
+                        wasAlternateProtocolAvailable: false,
+                        wasFetchedViaSpdy: true,
+                        wasNpnNegotiated: true
+                    };
+                },
+                csi: function() {
+                    return {
+                        onloadT: Date.now(),
+                        pageT: Date.now() - Math.random() * 10000,
+                        startE: Date.now() - Math.random() * 15000,
+                        tran: 15
+                    };
+                },
+                app: {
+                    isInstalled: false,
+                    InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+                    RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }
+                }
             };
 
             // 覆盖 permissions
@@ -72,6 +146,48 @@ class AntiDetection:
                     Promise.resolve({ state: Notification.permission }) :
                     originalQuery(parameters)
             );
+
+            // 隐藏 Playwright/Puppeteer 特征
+            delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+            delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+            delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+
+            // 伪造 WebGL 信息
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                if (parameter === 37445) {
+                    return 'Intel Inc.';
+                }
+                if (parameter === 37446) {
+                    return 'Intel Iris OpenGL Engine';
+                }
+                return getParameter.call(this, parameter);
+            };
+
+            // 伪造 canvas 指纹
+            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function(type) {
+                if (type === 'image/png' && this.width === 220 && this.height === 30) {
+                    // 检测到可能是指纹检测，添加噪点
+                    const context = this.getContext('2d');
+                    const imageData = context.getImageData(0, 0, this.width, this.height);
+                    for (let i = 0; i < imageData.data.length; i += 4) {
+                        imageData.data[i] += Math.random() * 0.1;
+                    }
+                    context.putImageData(imageData, 0, 0);
+                }
+                return originalToDataURL.apply(this, arguments);
+            };
+
+            // 控制台警告隐藏
+            const originalConsoleDebug = console.debug;
+            console.debug = function() {
+                if (arguments[0] && typeof arguments[0] === 'string' &&
+                    arguments[0].includes('webdriver')) {
+                    return;
+                }
+                return originalConsoleDebug.apply(this, arguments);
+            };
         """)
 
     @staticmethod
